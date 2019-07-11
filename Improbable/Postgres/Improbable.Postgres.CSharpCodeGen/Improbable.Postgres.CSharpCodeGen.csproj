@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <version>0.0.1-alpha-preview-1</version>
+    <Authors>Improbable Worlds, Ltd</Authors>
+    <Copyright>Improbable Worlds, Ltd</Copyright>
+    <Description>SpatialOS Postgres Code Generator</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Improbable.CSharpCodeGen\Improbable.CSharpCodeGen.csproj" />
+    <ProjectReference Include="..\..\Schema\Improbable.Schema.Bundle\Improbable.Schema.Bundle.csproj" />
+  </ItemGroup>
+</Project>

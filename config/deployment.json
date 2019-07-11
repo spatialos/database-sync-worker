@@ -1,0 +1,58 @@
+{
+    "template": "w2_r0500_e5",
+    "runtimeFlags": [
+      {
+        "name": "bridge_soft_handover_enabled",
+        "value": "false"
+      }
+    ],
+    "workerFlags": [
+      {
+        "workerType": "DatabaseSyncWorker",
+        "flags": [
+          {
+            "name": "postgres_host",
+            "value": "<hostname>"
+          },
+          {
+            "name": "postgres_user",
+            "value": "postgres"
+          },
+          {
+            "name": "postgres_password",
+            "value": "DO_NOT_USE_IN_PRODUCTION"
+          },
+          {
+            "name": "postgres_database",
+            "value": "Database=items"
+          },
+          {
+            "name": "postgres_additional",
+            "value": ""
+          }
+        ]
+      }
+    ],
+    "dimensionsInWorldUnits": {
+      "x": 1000,
+      "z": 1000
+    },
+    "loadBalancing": {
+        "layer_configurations": [
+
+            {
+              "layer": "database_sync",
+              "hex_grid": {
+                  "num_workers": 1
+              },
+              "options": {
+                  "manual_worker_connection_only": true
+              }
+            }
+        ]
+    },
+    "snapshot": {
+      "takeSnapshotIntervalSeconds": "600",
+      "startDeploymentFromSnapshotFile": "./snapshots/default.snapshot"
+    }
+}

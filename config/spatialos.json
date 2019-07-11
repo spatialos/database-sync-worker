@@ -1,0 +1,10 @@
+{
+    "configurationVersion": "0.1",
+    "projectName": "database_sync",
+    "schemaDescriptor": "../GeneratedCode/obj/GeneratedCode.schema.descriptor",
+    "clientWorkers": [
+    ],
+    "serverWorkers": [
+      "database_sync_worker.json"
+    ]
+  }

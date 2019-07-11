@@ -1,0 +1,74 @@
+{
+    "workerType": "DatabaseSyncWorker",
+    "layer": "database_sync",
+    "entityInterest": {
+      "range_entity_interest": {
+        "radius": 100
+      }
+    },
+    "permissions": {
+        "all": {}
+    },
+    "componentDelivery": {
+      "default": "RELIABLE_ORDERED",
+      "checkout_all_initially": true
+    },
+    "launchConfiguration": {
+      "cloudDeployment": {
+        "linux": {
+          "localBuildDirectory": "../Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp2.2/linux-x64/publish",
+          "command": "DatabaseSyncWorker",
+          "arguments": [
+            "receptionist",
+            "--spatialos-host", "${IMPROBABLE_RECEPTIONIST_HOST}",
+            "--spatialos-port", "${IMPROBABLE_RECEPTIONIST_PORT}",
+            "--worker-name", "${IMPROBABLE_WORKER_ID}",
+            "--logfile", "${IMPROBABLE_LOG_FILE}",
+            "--postgres-from-worker-flags"
+          ]
+        }
+      },
+      "localDeployment": {
+        "macos": {
+          "localBuildDirectory": "../Workers/DatabaseSyncWorker/bin/x64/Debug/netcoreapp2.2/local",
+          "command": "sh",
+          "arguments": [
+            "LocalRun.sh",
+            "receptionist",
+            "--spatialos-host", "${IMPROBABLE_RECEPTIONIST_HOST}",
+            "--spatialos-port", "${IMPROBABLE_RECEPTIONIST_PORT}",
+            "--worker-name", "${IMPROBABLE_WORKER_ID}",
+            "--logfile", "${IMPROBABLE_LOG_FILE}",
+            "--postgres-from-worker-flags"
+          ]
+        },
+        "linux": {
+          "localBuildDirectory": "../Workers/DatabaseSyncWorker/bin/x64/Debug/netcoreapp2.2/local",
+          "command": "sh",
+          "arguments": [
+            "LocalRun.sh",
+            "receptionist",
+            "--spatialos-host", "${IMPROBABLE_RECEPTIONIST_HOST}",
+            "--spatialos-port", "${IMPROBABLE_RECEPTIONIST_PORT}",
+            "--worker-name", "${IMPROBABLE_WORKER_ID}",
+            "--logfile", "${IMPROBABLE_LOG_FILE}",
+            "--postgres-from-worker-flags"
+          ]
+        },
+        "windows": {
+          "localBuildDirectory": "../Workers/DatabaseSyncWorker/bin/x64/Debug/netcoreapp2.2/local",
+          "command": "cmd",
+          "arguments": [
+            "/c",
+            "LocalRun.cmd",
+            "receptionist",
+            "--spatialos-host", "${IMPROBABLE_RECEPTIONIST_HOST}",
+            "--spatialos-port", "${IMPROBABLE_RECEPTIONIST_PORT}",
+            "--worker-name", "${IMPROBABLE_WORKER_ID}",
+            "--logfile", "${IMPROBABLE_LOG_FILE}",
+            "--postgres-from-worker-flags"
+          ]
+        }
+      }
+    }
+  }

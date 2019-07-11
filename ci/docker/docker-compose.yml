@@ -1,0 +1,10 @@
+version: "3"
+services:
+  dotnet:
+    build:
+      dockerfile: ci/docker/linux.Dockerfile
+      context: ../../
+    volumes:
+        - ${SPATIAL_OAUTH_DIR}:/var/spatial_oauth
+        - ${PACKAGES_DIR}:/build/worker/nupkgs
+

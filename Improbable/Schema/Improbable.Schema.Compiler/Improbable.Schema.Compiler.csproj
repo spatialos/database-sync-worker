@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <Version>$(SpatialOSSdkVersion)</Version>
+    <Description>SpatialOS Schema Compiler</Description>
+  </PropertyGroup>
+
+  <Target Name="Improbable_SchemaCompiler_PreparePackages" BeforeTargets="Restore;BeforeCompile" Condition="$(DesignTimeBuild) != true">
+    <RemoveDir Directories="tools" />
+    <MakeDir Directories="$(ZipDir)" />
+
+    <Exec Command="spatial package get tools schema_compiler-x86_64-win32 $(SpatialOSSdkVersion) $(ZipDir)/schema_compiler-x86_64-win32.zip" Condition="!Exists('$(ZipDir)/schema_compiler-x86_64-win32.zip')" />
+    <Unzip DestinationFolder="tools\win-x64" SourceFiles="$(ZipDir)\schema_compiler-x86_64-win32.zip" SkipUnchangedFiles="true" />
+
+    <Exec Command="spatial package get tools schema_compiler-x86_64-linux $(SpatialOSSdkVersion) $(ZipDir)/schema_compiler-x86_64-linux.zip" Condition="!Exists('$(ZipDir)/schema_compiler-x86_64-linux.zip')" />
+    <Unzip DestinationFolder="tools\linux-x64" SourceFiles="$(ZipDir)\schema_compiler-x86_64-linux.zip" SkipUnchangedFiles="true" />
+
+    <Exec Command="spatial package get tools schema_compiler-x86_64-macos $(SpatialOSSdkVersion) $(ZipDir)/schema_compiler-x86_64-macos.zip" Condition="!Exists('$(ZipDir)/schema_compiler-x86_64-macos.zip')" />
+    <Unzip DestinationFolder="tools\macos-x64" SourceFiles="$(ZipDir)\schema_compiler-x86_64-macos.zip" SkipUnchangedFiles="true" />
+  </Target>
+
+  <ItemGroup>
+    <!-- These items need to be in specific folders, rather than nested under the 'content' directory. -->
+    <Content Include="build\netstandard2.0\Improbable.Schema.Compiler.targets" PackagePath="%(Identity)" />
+    <Content Include="tools\linux-x64\schema_compiler" PackagePath="%(Identity)" />
+    <Content Include="tools\macos-x64\schema_compiler" PackagePath="%(Identity)" />
+    <Content Include="tools\win-x64\schema_compiler.exe" PackagePath="%(Identity)" />
+  </ItemGroup>
+</Project>

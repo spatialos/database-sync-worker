@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <SolutionDir Condition="'$(SolutionDir)'==''">$(MSBuildThisFileDirectory)</SolutionDir>
+  </PropertyGroup>
+
+  <!--> WORKAROUND: https://github.com/dotnet/sdk/issues/1834#issuecomment-399745156 </!-->
+  <PropertyGroup>
+    <TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>
+  </PropertyGroup>
+
+  <!-- Input properties for Improbable.Schema.Compiler -->
+  <PropertyGroup>
+    <SchemaGeneratedOutputDir>$(MSBuildProjectDirectory)\gen</SchemaGeneratedOutputDir>
+    <GeneratedDescriptorTarget>$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).schema.descriptor</GeneratedDescriptorTarget>
+    <GeneratedBundleTarget>$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).schema.json</GeneratedBundleTarget>
+    <GeneratedBuildMarker>$(MSBuildProjectDirectory)\obj\$(MSBuildProjectName).schema.marker.json</GeneratedBuildMarker>
+
+    <_CodeGenProject>$(SolutionDir)CSharpCodeGenerator\CSharpCodeGenerator\CSharpCodeGenerator.csproj</_CodeGenProject>
+    <CodeGenProject>$([MSBuild]::NormalizePath($(_CodeGenProject)))</CodeGenProject>
+    <CodeGenCommand>dotnet run -p "$(CodeGenProject)" -- --input-bundle "$(GeneratedBundleTarget)" --output-marker="$(GeneratedBuildMarker)" --output-dir "$(SchemaGeneratedOutputDir)"</CodeGenCommand>
+  </PropertyGroup>
+
+  <!-- CONFIGURATION POINT -->
+  <!-- This is ;-separated list of schema input directories from your project. -->
+  <ItemGroup>
+    <SchemaInputDir Include="$(SolutionDir)\schema" />
+  </ItemGroup>
+</Project>

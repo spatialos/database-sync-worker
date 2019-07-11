@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Platforms>x64</Platforms>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <LangVersion>latest</LangVersion>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="gen\**" />
+    <EmbeddedResource Remove="gen\**" />
+    <None Remove="gen\**" />
+  </ItemGroup>
+
+    <!-- Input items for Improbable.Schema.Compiler -->
+  <ItemGroup>
+      <SchemaInputDir Include="$(MSBuildProjectDirectory)\schema" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Improbable.Stdlib" Version="0.0.1-alpha-preview-1" />
+    <PackageReference Include="Improbable.DatabaseSync" Version="0.0.1-alpha-preview-1" />
+    <PackageReference Include="Improbable.Postgres.Schema" Version="0.0.1-alpha-preview-1" />
+    <PackageReference Include="Improbable.DatabaseSync.Schema" Version="0.0.1-alpha-preview-1" />
+    <PackageReference Include="Improbable.Stdlib.Schema" Version="13.8.1" />
+    <PackageReference Include="Improbable.Test.Schema" Version="13.8.1" />
+    <PackageReference Include="Improbable.WorkerSdkInterop" Version="13.8.1" />
+    <PackageReference Include="Improbable.Schema.Compiler" Version="13.8.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
+    <PackageReference Include="Npgsql" Version="4.0.7" />
+    <PackageReference Include="System.Collections.Immutable" Version="1.5.0" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <Version>$(SpatialOSSdkVersion)</Version>
+    <Description>SpatialOS Test Schema</Description>
+  </PropertyGroup>
+
+  <Target Name="Improbable_Schema_Test_PreparePackages" BeforeTargets="Restore;BeforeCompile" Condition="$(DesignTimeBuild) != true">
+    <RemoveDir Directories="schema" />
+    <MakeDir Directories="$(ZipDir)" />
+
+    <Exec Command="spatial package get schema test_schema_library $(SpatialOSSdkVersion) $(ZipDir)/test_schema.zip" Condition="!Exists('$(ZipDir)/test_schema.zip')" />
+    <Unzip DestinationFolder="schema" SourceFiles="$(ZipDir)/test_schema.zip" SkipUnchangedFiles="true" />
+  </Target>
+
+  <ItemGroup>
+    <!-- This item needs to be in specific folders, rather than nested under the 'content' directory. -->
+    <Content Include="build\netstandard2.0\Improbable.Test.Schema.targets" PackagePath="%(Identity)" />
+    <Content Include="schema\dependent_schema\test.schema" />
+    <Content Include="schema\test_schema\exhaustive_test.schema" />
+    <Content Include="schema\test_schema\nested_typenames.schema" />
+    <Content Include="schema\test_schema\recursion.schema" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+
+<Project>
+  <!--
+    Output a script that local deployments can use to launch the latest version of the worker.
+   -->
+
+  <Target Name="Improbable_Stdlib_EvalLocalRunProperties">
+    <!-- Windows platform -->
+    <PropertyGroup Condition="$([MSBuild]::IsOsPlatform(Windows))">
+      <LocalRunFile>$(OutDir)local\LocalRun.cmd</LocalRunFile>
+      <LocalRunCommand>dotnet "$(TargetPath)" %*</LocalRunCommand>
+    </PropertyGroup>
+
+    <!-- Linux/MacOs platforms -->
+    <PropertyGroup Condition="$([MSBuild]::IsOsPlatform(Linux)) Or $([MSBuild]::IsOsPlatform(OSX))">
+      <LocalRunFile>$(OutDir)local\LocalRun.sh</LocalRunFile>
+      <!-- Escape $* as %24%40 -->
+      <LocalRunCommand>dotnet "$(TargetPath)" "%24%40"</LocalRunCommand>
+    </PropertyGroup>
+  </Target>
+
+  <!-- Write the script files after a successful build. -->
+  <Target Name="PostBuild" DependsOnTargets="Improbable_Stdlib_EvalLocalRunProperties" AfterTargets="PostBuildEvent"
+          Condition="'$(OutputType)' == 'EXE'">
+    <MakeDir Directories="$(LocalRunRootDir)" />
+    <WriteLinesToFile Overwrite="true" Encoding="ASCII" File="$(LocalRunFile)" Lines="$(LocalRunCommand)" />
+    <Exec Condition="$([MSBuild]::IsOsPlatform(Linux)) Or $([MSBuild]::IsOsPlatform(OSX))"
+          Command="chmod +x &quot;$(LocalRunFile)&quot;" />
+  </Target>
+
+  <!-- Clean up. -->
+  <Target Name="CleanLocalRun" DependsOnTargets="Improbable_Stdlib_EvalLocalRunProperties" AfterTargets="Clean"
+          Condition="'$(OutputType)' == 'EXE'">
+    <Delete Files="$(LocalRunFile)" />
+  </Target>
+</Project>

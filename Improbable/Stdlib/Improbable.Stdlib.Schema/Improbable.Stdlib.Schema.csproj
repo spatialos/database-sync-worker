@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <Version>$(SpatialOSSdkVersion)</Version>
+    <Description>SpatialOS Standard Library Schema</Description>
+  </PropertyGroup>
+
+  <Target Name="Improbable_Schema_Stdlib_PreparePackages" BeforeTargets="Restore;BeforeCompile" Condition="$(DesignTimeBuild) != true">
+    <RemoveDir Directories="schema" />
+    <MakeDir Directories="$(ZipDir)" />
+
+    <Exec Command="spatial package get schema standard_library $(SpatialOSSdkVersion) $(ZipDir)/standard_library.zip" Condition="!Exists('$(ZipDir)/standard_library.zip')" />
+    <Unzip DestinationFolder="schema" SourceFiles="$(ZipDir)/standard_library.zip" SkipUnchangedFiles="true" />
+  </Target>
+
+  <ItemGroup>
+    <!-- This item needs to be in specific folders, rather than nested under the 'content' directory. -->
+    <Content Include="build\netstandard2.0\Improbable.Stdlib.Schema.targets" PackagePath="%(Identity)" />
+    <Content Include="schema\improbable\restricted\system_components.schema" />
+    <Content Include="schema\improbable\standard_library.schema" />
+    <Content Include="schema\improbable\vector3.schema" />
+  </ItemGroup>
+</Project>

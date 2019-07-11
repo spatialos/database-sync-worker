@@ -1,0 +1,25 @@
+# Tools and IDEs
+bin/
+obj/
+logs/
+.vs/
+.vscode/
+.idea/
+_ReSharper.Caches/
+*.pubxml
+*.user
+launchSettings.json
+
+# Generated code
+GeneratedCode/gen/
+CSharpCodeGenerator/CSharpCodeGenerator.Test/gen/
+
+# Ignore Worker SDK files that are downloaded in place in order to create Nuget packages.
+Improbable/WorkerSdkInterop/Improbable.WorkerSdkInterop/lib
+Improbable/WorkerSdkInterop/Improbable.WorkerSdkInterop/runtimes
+Improbable/Schema/Improbable.Schema.Compiler/tools
+Improbable/Stdlib/Improbable.Stdlib.Schema/schema
+Improbable/Test/Improbable.Test.Schema/schema
+
+# Local nuget packages source
+nupkgs/

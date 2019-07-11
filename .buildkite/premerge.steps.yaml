@@ -1,0 +1,53 @@
+linux: &linux
+  agents:
+    - "capable_of_building=online-services"
+    - "environment=production"
+    - "permission_set=builder"
+    - "platform=linux"  # if you need a different platform, configure this: macos|linux|windows.
+    - "queue=v3-1561728034-9178d5adb4ab9963-------z"
+  timeout_in_minutes: 60 # TODO(ENG-548): reduce timeout once agent-cold-start is optimised.
+  retry:
+    automatic:
+        # This is designed to trap and retry failures because agent lost connection. Agent exits with -1 in this case.
+      - exit_status: -1
+        limit: 3
+
+windows: &windows
+  agents:
+    - "capable_of_building=online-services"
+    - "environment=production"
+    - "permission_set=builder"
+    - "platform=windows"  # if you need a different platform, configure this: macos|linux|windows.
+    - "queue=v3-1559053399-f2c8651809a877b4-------z"
+    - "scaler_version=2"
+  timeout_in_minutes: 60 # TODO(ENG-548): reduce timeout once agent-cold-start is optimised.
+  retry:
+    automatic:
+        # This is designed to trap and retry failures because agent lost connection. Agent exits with -1 in this case.
+      - exit_status: -1
+        limit: 3
+        # Workaround for flaky Git clones, likely due to - https://github.com/PowerShell/Win32-OpenSSH/issues/1322
+      - exit_status: 128
+        limit: 3
+
+# NOTE: step labels turn into commit-status names like {org}/{repo}/{pipeline}/{step-label}, lower-case and hyphenated.
+# These are then relied on to have stable names by other things, so once named, please beware renaming has consequences.
+
+steps:
+  - label: "build-linux"
+    command: "ci/bk/build-linux.sh"
+    artifact_paths:
+      - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
+    <<: *linux
+
+  - label: "test-linux"
+    command: "ci/bk/test-linux.sh"
+    artifact_paths:
+      - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
+    <<: *linux
+
+  - label: "build-windows"
+    command: "powershell -NoProfile -NonInteractive -File ci/bk/build-win.ps1"
+    artifact_paths:
+      - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
+    <<: *windows

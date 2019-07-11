@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Platforms>x64</Platforms>
+    <Version>$(SpatialOSSdkVersion)</Version>
+  </PropertyGroup>
+
+  <Target Name="PreparePackages" BeforeTargets="Restore;BeforeCompile" Condition="$(DesignTimeBuild) != true" >
+    <RemoveDir Directories="lib;runtimes" />
+    <MakeDir Directories="$(ZipDir)" />
+
+    <Exec Command="spatial package get worker_sdk csharp-c-interop $(SpatialOSSdkVersion) $(ZipDir)/csharp-c-interop.zip" Condition="!Exists('$(ZipDir)\csharp-c-interop.zip')" />
+    <Unzip DestinationFolder="lib\netstandard2.0" SourceFiles="$(ZipDir)\csharp-c-interop.zip" SkipUnchangedFiles="true" />
+
+    <!--
+      Native code that the managed DLL binds to.
+      The DestinationFolder attribute's "runtimes/<rid>/native" is important.
+      See https://docs.microsoft.com/en-us/dotnet/core/rid-catalog for the Runtime Id catalog.
+      -->
+    <Exec Command="spatial package get worker_sdk core-dynamic-x86_64-win32 $(SpatialOSSdkVersion) $(ZipDir)/core-dynamic-x86_64-win32.zip" Condition="!Exists('$(ZipDir)\core-dynamic-x86_64-win32.zip')" />
+    <Unzip DestinationFolder="runtimes\win-x64\native" SourceFiles="$(ZipDir)\core-dynamic-x86_64-win32.zip" SkipUnchangedFiles="true" />
+
+    <Exec Command="spatial package get worker_sdk core-dynamic-x86_64-macos $(SpatialOSSdkVersion) $(ZipDir)/core-dynamic-x86_64-macos.zip" Condition="!Exists('$(ZipDir)\core-dynamic-x86_64-macos.zip')" />
+    <Unzip DestinationFolder="runtimes\osx-x64\native" SourceFiles="$(ZipDir)\core-dynamic-x86_64-macos.zip" SkipUnchangedFiles="true" />
+
+    <Exec Command="spatial package get worker_sdk core-dynamic-x86_64-linux $(SpatialOSSdkVersion) $(ZipDir)/core-dynamic-x86_64-linux.zip" Condition="!Exists('$(ZipDir)\core-dynamic-x86_64-linux.zip')" />
+    <Unzip DestinationFolder="runtimes\linux-x64\native" SourceFiles="$(ZipDir)\core-dynamic-x86_64-linux.zip" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- These items need to be in specific folders, rather than nested under the 'content' directory. -->
+  <ItemGroup>
+    <Content Include="build\netstandard2.0\Improbable.WorkerSdkInterop.targets" PackagePath="%(Identity)" />
+    <Content Include="lib\netstandard2.0\Improbable.Worker.CInterop.dll" PackagePath="%(Identity)" />
+    <Content Include="lib\netstandard2.0\Improbable.Worker.CInterop.xml" PackagePath="%(Identity)" />
+    <Content Include="runtimes\linux-x64\native\libCoreSdkDll.so" PackagePath="%(Identity)" />
+    <Content Include="runtimes\osx-x64\native\libCoreSdkDll.dylib" PackagePath="%(Identity)" />
+    <Content Include="runtimes\win-x64\native\CoreSdkDll.dll" PackagePath="%(Identity)" />
+  </ItemGroup>
+</Project>
