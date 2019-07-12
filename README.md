@@ -1,7 +1,7 @@
 # Using SpatialOS to talk to a database (preview)
 
 First, some pre-requisites:
-* Moderate to experienced familiarity with SpatialOS concepts, project structure and configuration. *This project is intended for developers who want to extend their eexisting SpatialOS project with new capabilities.*
+* Moderate to experienced familiarity with SpatialOS concepts, project structure and configuration. *This project is intended for developers who want to extend their existing SpatialOS project with new capabilities.*
 * Some level of comfort with cmd/Powershell, or bash.
 
 # Premise
@@ -252,7 +252,7 @@ The executable entry point is `Workers/DatabaseSyncWorker/bin/x64/Release/netcor
 
 # Interacting with the database
 
-The DBSync worker runs an entity with a `DatabaseSyncService` component on it.
+The DBSync worker is authoritative over an entity with a `DatabaseSyncService` component on it.
 This component provides commands like `Create`, `GetItems` and `Increment`.
 
 See [database_sync.schema] for the documentation for each specific command.
@@ -289,7 +289,7 @@ Later, when `player2` logs in and sends a `GetItem('profiles.player1')` request 
 
 ## Handling failures
 
-Commands can fail for a variety of reasons. When processing a failed `CommandResponse`, if the `StatusCode` is `ApplicationError`, then you can inspect the `Message` field for more details.
+Commands can fail for a variety of reasons. When processing a failed `CommandResponse` where the `StatusCode` is `ApplicationError`, you can then inspect the `Message` field for more details.
 
 [database_sync.schema] defines a `CommandErrors` enumeration, whose numeric value is stored in the `Message` field of a failed command.
 
