@@ -16,8 +16,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DatabaseSyncTestClient", "W
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CSharpCodeGenerator", "CSharpCodeGenerator\CSharpCodeGenerator\CSharpCodeGenerator.csproj", "{F1E2ECD6-1998-479F-AF15-D3B3131BAD5A}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CSharpCodeGenerator.Test", "CSharpCodeGenerator\CSharpCodeGenerator.Test\CSharpCodeGenerator.Test.csproj", "{C4C2C385-E9BD-456F-9D22-867B2B04EF4F}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Workers", "Workers", "{382C3281-9759-41CE-B25C-34ACACE3A3A8}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CSharpCodeGenerator", "CSharpCodeGenerator", "{31E97862-E04A-4EB5-9EBA-AFDB0F453BA6}"
@@ -56,14 +54,6 @@ Global
 		{F1E2ECD6-1998-479F-AF15-D3B3131BAD5A}.Release|Any CPU.Build.0 = Release|Any CPU
 		{F1E2ECD6-1998-479F-AF15-D3B3131BAD5A}.Release|x64.ActiveCfg = Release|Any CPU
 		{F1E2ECD6-1998-479F-AF15-D3B3131BAD5A}.Release|x64.Build.0 = Release|Any CPU
-		{C4C2C385-E9BD-456F-9D22-867B2B04EF4F}.Debug|Any CPU.ActiveCfg = Debug|x64
-		{C4C2C385-E9BD-456F-9D22-867B2B04EF4F}.Debug|Any CPU.Build.0 = Debug|x64
-		{C4C2C385-E9BD-456F-9D22-867B2B04EF4F}.Debug|x64.ActiveCfg = Debug|x64
-		{C4C2C385-E9BD-456F-9D22-867B2B04EF4F}.Debug|x64.Build.0 = Debug|x64
-		{C4C2C385-E9BD-456F-9D22-867B2B04EF4F}.Release|Any CPU.ActiveCfg = Release|x64
-		{C4C2C385-E9BD-456F-9D22-867B2B04EF4F}.Release|Any CPU.Build.0 = Release|x64
-		{C4C2C385-E9BD-456F-9D22-867B2B04EF4F}.Release|x64.ActiveCfg = Release|x64
-		{C4C2C385-E9BD-456F-9D22-867B2B04EF4F}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
