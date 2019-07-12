@@ -41,14 +41,14 @@ namespace DatabaseSyncWorker
                 .WithParsed<ReceptionistOptions>(opts => options = opts)
                 .WithParsed<LocatorOptions>(opts => options = opts);
 
-            if (options.UnknownPositionalArguments.Any())
+            if (options == null)
             {
-                Console.Error.WriteLine($@"Unknown positional arguments: [{string.Join(", ", options.UnknownPositionalArguments)}]");
                 return 1;
             }
 
-            if (options == null)
+            if (options.UnknownPositionalArguments.Any())
             {
+                Console.Error.WriteLine($@"Unknown positional arguments: [{string.Join(", ", options.UnknownPositionalArguments)}]");
                 return 1;
             }
 
