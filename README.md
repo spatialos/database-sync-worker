@@ -4,8 +4,6 @@ First, some pre-requisites:
 * Moderate to experienced familiarity with SpatialOS concepts, project structure and configuration. *This project is intended for developers who want to extend their eexisting SpatialOS project with new capabilities.*
 * Some level of comfort with cmd/Powershell, or bash.
 
-If this suits you, then read on!
-
 # Premise
 Sometimes, your game has data that:
 
@@ -33,13 +31,20 @@ In order to use DBSync in your project, you'll need to do the following:
 1. Setup PostgreSQL locally, and in the cloud.
 2. Add the DBSync and its schema to your project.
 3. Configure SpatialOS to start a single DBSync.
-4. [Future work](#Auto-mapping-DatabaseSyncItems-to-and-SpatialOS-components) *Write schema components that you wish to be mirrored in and out of the database.*
-5. Send DBSync commands from your workers to read and write to the hierarchy data.
-6. Receive updates in your workers and clients that reflect the state of the hierarchy data in the database.
+4. Send DBSync commands from your workers to read and write to the hierarchy data.
+5. Receive updates in your workers and clients that reflect the state of the hierarchy data in the database.
+
+## Structure
+
+* `Bootstrap/` - A utility that sets up database tables that DBSync can use.
+* `CSharpCodeGenerator` - Generates C# code from your project's schema.
+* `GeneratedCode` - The output of `CSharpCodeGenerator`.
+* `Improbable` - The source for supporting libraries meant to be used by your worker. Once APIs have finalized, these will also be available on [nuget.org]
+* `schema` - A placeholder, empty schema, so the project builds out of the box.
+* `scripts` - Scripts that automate common and repetitive tasks.
+* `Workers/DatabaseSyncWorker` - The source for DBSync.
 
 ## Setup
-
-This project is based on the .NET Core C# worker [project].
 
 ### Locally
 
@@ -49,7 +54,7 @@ This project is based on the .NET Core C# worker [project].
 
 ### In the cloud
 
-We don't currently provide hosting for PostgreSQL in the cloud.
+We don't currently provide hosting for PostgreSQL in the cloud, but you can use [Google Cloud SQL for PostgreSQL](https://cloud.google.com/sql/docs/postgres/quickstart) to get up and running.
 When you have your cloud PostgreSQL setup, see [Configure DBSync](#Configure-DBSync).
 
 ## Add DBSync schema to your project
@@ -65,6 +70,8 @@ You can include these files in your project in a few ways.
 ---
 
 ### Option 1: Copying
+
+This is best used when your project is using [Structured Project Layout].
 You can simply copy the two files into your project's `schema` directory, keeping the directory structure intact.
 
 For example
@@ -80,7 +87,9 @@ For example
 
 ### Option 2: Adding a `schema_path`
 
-If your project invokes the schema_compiler directly, you can point it to the new `schema` folders:
+This is best used when your project is using [Flexible Project Layout].
+If your project invokes the [schema compiler] directly, you can point it to the new `schema` folders
+
 ```
 schema_compiler
     ...arguments...
@@ -92,7 +101,7 @@ schema_compiler
 
 ### Option 3: Nuget package references
 
-If your project happens to be entirely .NET Core C# based, then you can simply add Nuget references to your `GeneratedCode` project:
+If your project is entirely .NET Core C# based, then you can simply add Nuget references to your `GeneratedCode` project:
 ```
 dotnet add GeneratedCode/GeneratedCode.csproj package "Improbable.Postgres.Schema" --version 0.0.1-alpha-preview-1
 dotnet add GeneratedCode/GeneratedCode.csproj package "Improbable.DatabaseSync.Schema" --version 0.0.1-alpha-preview-1
@@ -195,11 +204,13 @@ Here is a suggested [deployment configuration]:
 
 ### Configuring the database
 
+DBSync stores its data in PostgreSQL.
+The data that is stored is derived from the `DatabaseSyncItem` type in [database_sync.schema]. The `CodeGenerator` uses the Nuget package `Improbable.Postgres.CSharpCodeGen` to generate both C# helpers and SQL to safely map data back and forth between SpatialOS and the database.
+This code is used while the worker is running in SpatialOS, and at project setup time to setup the database to the right state.
+
 * The default database is `"items"`.
 * The default table in this database is also `"items"`. This contains all of the hierarchical data.
 * The default metrics table in this database is `"metrics"`. This contains various metrics the worker collects about timings, command counts, and failures.
-
-> NOTE: This script `DROPS` the table each time you run it.
 
 > NOTE: Currently, the DBSync worker assumes the name of the table is the same as the database. This is why both are `"items"`.
 
@@ -218,6 +229,8 @@ Here is a suggested [deployment configuration]:
 **Remote, macOS/Linux**
 
 `scripts/reset-database.sh --postgres-host "_your_instance_hostname" --postgres-username "_your_instance_username_" --postgres-password "DO_NOT_USE_IN_PRODUCTION"`
+
+> NOTE: The `reset-database` script  `DROPS` the `"items"` database each time you run it.
 
 ## Building for local
 
@@ -332,3 +345,6 @@ The backend work for this feature is complete, and integration and example work 
 [database_sync.schema]: ./Improbable/DatabaseSync/Improbable.DatabaseSync.Schema/schema/improbable/database_sync/database_sync.schema
 [Command Response]: https://docs.improbable.io/reference/13.8/csharpsdk/api-reference#improbable-worker-commandresponseop-c-struct
 [System Entities]: https://docs.improbable.io/reference/13.8/shared/design/system-entities#system-entities
+[Structured Project Layout]: https://docs.improbable.io/reference/13.8/shared/glossary#structured-project-layout-spl
+[Flexible Project Layout]: https://docs.improbable.io/reference/13.8/shared/glossary#flexible-project-layout-fpl
+[schema compiler]: https://docs.improbable.io/reference/13.8/shared/schema/introduction#schema-compiler-cli-reference
