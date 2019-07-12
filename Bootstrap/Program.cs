@@ -62,7 +62,20 @@ namespace Bootstrap
                 Log.Error(e, "Failed to run database commands");
                 return 1;
             }
+        }
 
+        public static PostgresOptions CreatePostgresOptions(IPostgresOptions options)
+        {
+            return new PostgresOptions((key, value) =>
+            {
+                var envFlag = Environment.GetEnvironmentVariable(key.ToUpperInvariant());
+                if (!string.IsNullOrEmpty(envFlag))
+                {
+                    return envFlag;
+                }
+
+                return PostgresOptions.GetFromIOptions(options, key, value);
+            });
         }
     }
 }
