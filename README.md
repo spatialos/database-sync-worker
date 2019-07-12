@@ -21,7 +21,7 @@ We think that as soon as the data needs to be read and modified by SpatialOS wor
 That is, in terms of [components], component updates and [commands].
 This lets you keep your game's logic using the same data models that are already established.
 
-**We're providing the ability to easily map a hierarchy of data back and forth between a database, a SpatialOS deployment and its workers and clients.**
+**We're providing the ability to easily map a hierarchy of data back and forth between a database and a SpatialOS deployment's workers and clients.**
 
 The core of this ability is the Database Sync Worker (DBSync).
 DBSync is based on the .NET Core C# [worker project](https://github.com/improbable/dotnet_core_worker/).
