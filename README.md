@@ -24,7 +24,7 @@ This lets you keep your game's logic using the same data models that are already
 **We're providing the ability to easily map a hierarchy of data back and forth between a database, a SpatialOS deployment and its workers and clients.**
 
 The core of this ability is the Database Sync Worker (DBSync).
-DBSync is based on the C# .NET Core [project](https://github.com/improbable/dotnet_core_worker/).
+DBSync is based on the .NET Core C# [worker project](https://github.com/improbable/dotnet_core_worker/).
 
 In order to use DBSync in your project, you'll need to do the following:
 
@@ -48,7 +48,7 @@ In order to use DBSync in your project, you'll need to do the following:
 
 ### Locally
 
-1. First, please follow the guide for the .NET Core C# worker [project]
+1. First, please follow the guide for the .NET Core C# [worker project]
 2. Install Postgres 11 from [postgresql.org/download/windows](https://postgresql.org/download/windows)
    1. Set the default password to `DO_NOT_USE_IN_PRODUCTION`
 
@@ -232,7 +232,7 @@ This code is used while the worker is running in SpatialOS, and at project setup
 
 > NOTE: The `reset-database` script  `DROPS` the `"items"` database each time you run it.
 
-## Building for local
+## Building and running locally
 
 Directly, from the command line: `dotnet run -p Workers/DatabaseSyncWorker receptionist`
 
@@ -327,7 +327,7 @@ This allows you to have persistent data, while also dealing with your types in a
 The backend work for this feature is complete, and integration and example work is beginning now.
 
 
-[project]: https://github.com/improbable/dotnet_core_worker/README.md
+[worker project]: https://github.com/improbable/dotnet_core_worker/README.md
 [launch configuration]: https://docs.improbable.io/reference/13.8/shared/project-layout/launch-configuration#worker-launch-configuration
 [schema]: https://docs.improbable.io/reference/13.8/shared/schema/reference
 [ltree]: https://www.postgresql.org/docs/current/ltree.html
