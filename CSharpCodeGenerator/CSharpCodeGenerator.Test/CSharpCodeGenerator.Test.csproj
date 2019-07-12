@@ -20,10 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Improbable.Stdlib" Version="0.0.1-alpha-preview-1" />
-    <PackageReference Include="Improbable.DatabaseSync" Version="0.0.1-alpha-preview-1" />
-    <PackageReference Include="Improbable.Postgres.Schema" Version="0.0.1-alpha-preview-1" />
-    <PackageReference Include="Improbable.DatabaseSync.Schema" Version="0.0.1-alpha-preview-1" />
+    <PackageReference Include="Improbable.Stdlib" Version="0.0.1-preview" />
+    <PackageReference Include="Improbable.DatabaseSync" Version="0.0.1-preview" />
+    <PackageReference Include="Improbable.Postgres.Schema" Version="0.0.1-preview" />
+    <PackageReference Include="Improbable.DatabaseSync.Schema" Version="0.0.1-preview" />
     <PackageReference Include="Improbable.Stdlib.Schema" Version="13.8.1" />
     <PackageReference Include="Improbable.Test.Schema" Version="13.8.1" />
     <PackageReference Include="Improbable.WorkerSdkInterop" Version="13.8.1" />

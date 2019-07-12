@@ -4,7 +4,7 @@
     <LangVersion>latest</LangVersion>
 
     <IncludeBuildOutput>false</IncludeBuildOutput>
-    <Version>0.0.1-alpha-preview-1</Version>
+    <Version>0.0.1-preview</Version>
     <Description>SpatialOS Postgres Schema</Description>
   </PropertyGroup>
 
