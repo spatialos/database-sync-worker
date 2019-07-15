@@ -16,7 +16,7 @@ namespace Improbable.Postgres
         [Option("postgres-database", Default = "postgres")]
         string PostgresDatabase { get; set; }
 
-        [Option("postgres-additional-options", Default = "")]
+        [Option("postgres-additional-options", Default = "", HelpText="Add additional PostgreSQL connection parameters. See https://www.npgsql.org/doc/connection-string-parameters.html?q=connection for more information.")]
         string PostgresAdditionalOptions { get; set; }
     }
 }

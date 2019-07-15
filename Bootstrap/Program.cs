@@ -22,11 +22,14 @@ namespace Bootstrap
             {
                 return Parser.Default
                     .ParseArguments<
-                        RunDatabaseCommandsOptions>(args)
+                        RunDatabaseCommandsOptions,
+                        CreateDatabaseSyncTableOptions>(args)
                     .MapResult<
                         RunDatabaseCommandsOptions,
+                        CreateDatabaseSyncTableOptions,
                         int>(
                         RunDatabaseCommands,
+                        CreateDatabaseSyncTable,
                         errors => 1);
             }
             catch (Exception e)
@@ -55,6 +58,8 @@ namespace Bootstrap
                     cmd.Command.ExecuteNonQuery();
                 }
 
+                Log.Information("Done.");
+
                 return 0;
             }
             catch (Exception e)
@@ -64,7 +69,30 @@ namespace Bootstrap
             }
         }
 
-        public static PostgresOptions CreatePostgresOptions(IPostgresOptions options)
+        private static int CreateDatabaseSyncTable(CreateDatabaseSyncTableOptions options)
+        {
+            try
+            {
+                var commands = DatabaseSyncItem.InitializeDatabase(options.TableName);
+
+                using (var connection = new ConnectionWrapper(CreatePostgresOptions(options).ConnectionString))
+                using (var command = connection.Command(commands))
+                {
+                    Log.Information("Initializing {TableName}...", options.TableName);
+                    command.Command.ExecuteNonQuery();
+                    Log.Information("Done.");
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Failed to create {TableName}", options.TableName);
+                return 1;
+            }
+
+            return 0;
+        }
+
+        private static PostgresOptions CreatePostgresOptions(IPostgresOptions options)
         {
             return new PostgresOptions((key, value) =>
             {
