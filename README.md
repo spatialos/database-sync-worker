@@ -348,3 +348,12 @@ The backend work for this feature is complete, and integration and example work 
 [Structured Project Layout]: https://docs.improbable.io/reference/13.8/shared/glossary#structured-project-layout-spl
 [Flexible Project Layout]: https://docs.improbable.io/reference/13.8/shared/glossary#flexible-project-layout-fpl
 [schema compiler]: https://docs.improbable.io/reference/13.8/shared/schema/introduction#schema-compiler-cli-reference
+
+# License
+
+This software is licensed under MIT. See the [LICENSE](./LICENSE.md) file for details.
+
+# Contributing
+
+We currently don't accept PRs from external contributors - sorry about that! We do accept bug reports and feature requests in the form of issues, though.
+

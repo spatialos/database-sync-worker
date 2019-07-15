@@ -87,7 +87,7 @@ namespace Improbable.Schema.Bundle
 
                 if (!allowed)
                 {
-                    Console.WriteLine($"Warning: field '{qualifiedName}.{f.Name}' is the Entity type, which is currently unsupported.");
+                    Console.WriteLine($"field '{qualifiedName}.{f.Name}' is the Entity type, which is currently unsupported.");
                 }
 
                 return allowed;
