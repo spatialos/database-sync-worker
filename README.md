@@ -241,3 +241,11 @@ When a client logs in, they are provided a unique WorkerId which SpatialOS inclu
 [worker flags]: https://docs.improbable.io/reference/13.8/shared/worker-configuration/worker-flags#worker-flags
 [worker-flag set]: https://docs.improbable.io/reference/13.8/shared/spatial-cli/spatial-project-deployment-worker-flag-set#spatial-project-deployment-worker-flag-set
 [entity query]: https://docs.improbable.io/reference/13.8/csharpsdk/using/sending-data#entity-queries
+
+# License
+
+This software is licensed under MIT. See the [LICENSE](./LICENSE.md) file for details.
+
+# Contributing
+
+We currently don't accept PRs from external contributors - sorry about that! We do accept bug reports and feature requests in the form of issues, though.
