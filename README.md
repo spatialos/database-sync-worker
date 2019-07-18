@@ -34,7 +34,7 @@ In order to use DBSync in your project, you'll need to do the following:
 4. Send DBSync commands from your workers to read and write to the hierarchy data.
 5. Receive updates in your workers and clients that reflect the state of the hierarchy data in the database.
 
-## Structure
+## Project layout
 
 * `Bootstrap/` - A utility that sets up database tables that DBSync can use.
 * `CSharpCodeGenerator` - Generates C# code from your project's schema.
@@ -48,7 +48,7 @@ In order to use DBSync in your project, you'll need to do the following:
 
 ### Locally
 
-1. First, please follow the guide for the .NET Core C# [worker project]
+1. First, please follow the guide for the .NET Core C# [worker project](https://github.com/improbable/dotnet_core_worker/)
 2. Install Postgres 11 from [postgresql.org/download/windows](https://postgresql.org/download/windows)
    1. Set the default password to `DO_NOT_USE_IN_PRODUCTION`
 
