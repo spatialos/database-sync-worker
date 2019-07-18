@@ -34,7 +34,7 @@ In order to use DBSync in your project, you'll need to do the following:
 4. Send DBSync commands from your workers to read and write to the hierarchy data.
 5. Receive updates in your workers and clients that reflect the state of the hierarchy data in the database.
 
-## Structure
+## Project layout
 
 * `Bootstrap/` - A utility that sets up database tables that DBSync can use.
 * `CSharpCodeGenerator` - Generates C# code from your project's schema.
