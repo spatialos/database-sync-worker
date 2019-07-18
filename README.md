@@ -48,7 +48,7 @@ In order to use DBSync in your project, you'll need to do the following:
 
 ### Locally
 
-1. First, please follow the guide for the .NET Core C# [worker project]
+1. First, please follow the guide for the .NET Core C# [worker project](https://github.com/improbable/dotnet_core_worker/)
 2. Install Postgres 11 from [postgresql.org/download/windows](https://postgresql.org/download/windows)
    1. Set the default password to `DO_NOT_USE_IN_PRODUCTION`
 
