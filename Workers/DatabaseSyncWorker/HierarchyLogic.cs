@@ -612,12 +612,12 @@ namespace DatabaseSyncWorker
 
                     if (!string.IsNullOrEmpty(newProfile))
                     {
-                        changedPaths.Add(newProfile);
+                        changedPaths.Add(change.New.Path);
                     }
 
                     if (!string.IsNullOrEmpty(oldProfile))
                     {
-                        changedPaths.Add(oldProfile);
+                        changedPaths.Add(change.Old?.Path);
                     }
 
                     // Work out database roundtrip time

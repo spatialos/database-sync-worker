@@ -40,13 +40,13 @@ enum CommandErrors {
 }
 
 component DatabaseSyncReference {
-    id = 20006;
+    id = 1906;
 
     string path = 1;
 }
 
 component AssociateDatabaseSync {
-    id = 20007;
+    id = 1907;
 
     int64 count = 1;
 }
@@ -261,7 +261,7 @@ type PathsUpdated {
 }
 
 component DatabaseSyncService {
-  id = 20001;
+  id = 1901;
 
   // Gets a single item.
   // Requires read authorization.
@@ -318,7 +318,7 @@ component DatabaseSyncService {
 
 // TODO: OS-389 Split this out into a separate test namespace.
 component HydrationTest {
-  id = 20003;
+  id = 1903;
 
   [ProfileIdAnnotation]
   string profile_id = 1;
