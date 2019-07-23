@@ -2,7 +2,7 @@
 
 The Database Sync Worker is a SpatialOS server-worker designed to easily sync and persist cross-session game data (such as player inventories) between SpatialOS and an external database.
 
-> If you intend to use this worker with the SpatialOS GDK for Unreal, we recommend following [this tutorial] instead of the below Setup guide. It takes you through integrating this worked in the [Example Project] and using it to store the “All Time Kills” and “Deaths” of the players in a Postgres database running on your local machine. 
+> If you intend to use this worker with the SpatialOS GDK for Unreal, we recommend following [this tutorial] instead of the below Setup guide. It takes you through integrating this worker in the [Example Project] and using it to store the “All Time Kills” and “Deaths” of the players in a Postgres database running on your local machine. 
 
 ## Premise
 
@@ -18,11 +18,16 @@ A simple example of this might be players' permanent data, which could contain p
 2. Clients and workers both need to view and modify the profile based on what the player does in-game
 3. Online stores, stats services and customer services need access to the profile information
 
-The Database Sync Worker is built on the premise that given this data will be read and modified by SpatialOS workers, it should be presented in the same way as all other SpatialOS data - using [SpatialOS schema](https://docs.improbable.io/reference/latest/shared/schema/introduction/ ) components and commands. This lets you keep your game's logic using the same data models that are already established.
+The Database Sync Worker is built on the premise that given this data will be read and modified by SpatialOS workers, it should be presented in the same way as all other SpatialOS data - using [SpatialOS schema](https://docs.improbable.io/reference/latest/shared/schema/introduction/ ) components and commands. This lets you keep your game's logic using already established data models.
 
 **The Database Sync Worker (DBSync for short) provides the ability to easily map a hierarchy of data back and forth between a database and a SpatialOS deployment's workers and clients.**
 
 DBSync is based on the [SpatialOS C# Worker Template](https://github.com/improbable/dotnet_core_worker/).
+
+## Prerequisites
+
+* Moderate to experienced familiarity with SpatialOS concepts, project structure and configuration. **This project is intended for developers who want to extend their existing SpatialOS project with new capabilities.**
+* Comfortable with cmd/Powershell, or bash.
 
 In order to use DBSync in your project, you'll need to do the following:
 
@@ -31,11 +36,6 @@ In order to use DBSync in your project, you'll need to do the following:
 3. Configure SpatialOS to start a single DBSync.
 4. Send DBSync commands from your workers to read and write to the hierarchy data.
 5. Receive updates in your workers and clients that reflect the state of the hierarchy data in the database.
-
-## Prerequisites
-
-* Moderate to experienced familiarity with SpatialOS concepts, project structure and configuration. **This project is intended for developers who want to extend their existing SpatialOS project with new capabilities.**
-* Comfortable with cmd/Powershell, or bash.
 
 ## Project layout
 
