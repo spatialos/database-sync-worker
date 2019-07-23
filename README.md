@@ -1,15 +1,16 @@
-# Using SpatialOS to talk to a database (preview)
+# Database Sync Worker (preview)
 
-First, some pre-requisites:
-* Moderate to experienced familiarity with SpatialOS concepts, project structure and configuration. *This project is intended for developers who want to extend their existing SpatialOS project with new capabilities.*
-* Some level of comfort with cmd/Powershell, or bash.
+The Database Sync Worker is a SpatialOS server-worker designed to easily sync and persist cross-session game data (such as player inventories) between SpatialOS and an external database.
 
-# Premise
+> If you intend to use this worker with the SpatialOS GDK for Unreal, we recommend following [this tutorial] instead of the below Setup guide. It takes you through integrating this worker in the [Example Project] and using it to store the “All Time Kills” and “Deaths” of the players in a Postgres database running on your local machine. 
+
+## Premise
+
 Sometimes, your game has data that:
 
 1. Needs to live longer than the lifetime of a deployment
 2. Needs to be used by SpatialOS workers and clients
-3. Can be accessible to other services and platforms, outside of SpatialOS
+3. Needs to be accessible to other services and platforms, outside of SpatialOS
 
 A simple example of this might be players' permanent data, which could contain persistent character unlocks, stats and customisations.
 
@@ -17,14 +18,16 @@ A simple example of this might be players' permanent data, which could contain p
 2. Clients and workers both need to view and modify the profile based on what the player does in-game
 3. Online stores, stats services and customer services need access to the profile information
 
-We think that as soon as the data needs to be read and modified by SpatialOS workers, then it should be presented in the same way as all other SpatialOS data.
-That is, in terms of [components], component updates and [commands].
-This lets you keep your game's logic using the same data models that are already established.
+The Database Sync Worker is built on the premise that given this data will be read and modified by SpatialOS workers, it should be presented in the same way as all other SpatialOS data - using [SpatialOS schema](https://docs.improbable.io/reference/latest/shared/schema/introduction/ ) components and commands. This lets you keep your game's logic using already established data models.
 
-**We're providing the ability to easily map a hierarchy of data back and forth between a database and a SpatialOS deployment's workers and clients.**
+**The Database Sync Worker (DBSync for short) provides the ability to easily map a hierarchy of data back and forth between a database and a SpatialOS deployment's workers and clients.**
 
-The core of this ability is the Database Sync Worker (DBSync).
-DBSync is based on the .NET Core C# [worker project](https://github.com/improbable/dotnet_core_worker/).
+DBSync is based on the [SpatialOS C# Worker Template](https://github.com/improbable/dotnet_core_worker/).
+
+## Prerequisites
+
+* Moderate to experienced familiarity with SpatialOS concepts, project structure and configuration. **This project is intended for developers who want to extend their existing SpatialOS project with new capabilities.**
+* Comfortable with cmd/Powershell, or bash.
 
 In order to use DBSync in your project, you'll need to do the following:
 
@@ -48,7 +51,7 @@ In order to use DBSync in your project, you'll need to do the following:
 
 ### Locally
 
-1. First, please follow the guide for the .NET Core C# [worker project](https://github.com/improbable/dotnet_core_worker/)
+1. Follow the guide for the [SpatialOS C# Worker Template](https://github.com/improbable/dotnet_core_worker/)
 2. Install Postgres 11 from [postgresql.org/download/windows](https://postgresql.org/download/windows)
    1. Set the default password to `DO_NOT_USE_IN_PRODUCTION`
 
@@ -279,7 +282,7 @@ When you create the `DatabaseSyncService` component, add the write-authorized la
 
 ### Read
 
-When a client logs in, they are provided a unique WorkerId which SpatialOS includes with every command request. When the client's entities are created, an authorized worker can also create an association between a profile root, and this unique ID.
+When a client logs in, they are provided a unique `WorkerId` which SpatialOS includes with every command request. When the client's entities are created, an authorized worker can also create an association between a profile root, and this unique ID.
 
 It can do this by sending the `associate_path_with_client` command to DBSync in order to allow it. For example, `associate_path_with_client(profiles.player1 -> workerId:Client-{0e61a845-e978-4e5f-b314-cc6bf1929171})`.
 
@@ -317,37 +320,14 @@ We have plans to mitigate this by adding the concept of "version" which will rej
 
 ## Leverage [System Entities] for player identity
 
-There is an `associate_path_with_client` command, used to tie client workers to specific paths. The need for this should be removed when we leverage the features of [System Entities].
+There is an `associate_path_with_client` command, used to tie client workers to specific paths. The need for this should be removed when we leverage the features of SpatialOS [System Entities].
 
-## Auto-mapping `DatabaseSyncItems` to and SpatialOS components
+## Auto-mapping `DatabaseSyncItems` to and from SpatialOS components
 
 Sometimes, it may be more natural to interact with data in the database in terms of components that are automatically replicated to the database.
 This allows you to have persistent data, while also dealing with your types in a higher-level than `DatabaseSyncItems`. This also allows you to leverage SpatialOS's interest systems for efficiently broadcasting state updates throughout your game.
 
 The backend work for this feature is complete, and integration and example work is beginning now.
-
-
-[worker project]: https://github.com/improbable/dotnet_core_worker/README.md
-[launch configuration]: https://docs.improbable.io/reference/13.8/shared/project-layout/launch-configuration#worker-launch-configuration
-[schema]: https://docs.improbable.io/reference/13.8/shared/schema/reference
-[ltree]: https://www.postgresql.org/docs/current/ltree.html
-[annotations]: https://docs.improbable.io/reference/13.8/shared/schema/reference#annotations
-[layers]: https://docs.improbable.io/reference/13.8/shared/concepts/layers#layers
-[ACLs]: https://docs.improbable.io/reference/13.8/javasdk/using/creating-and-deleting-entities#entity-acls
-[components]: https://docs.improbable.io/reference/13.8/shared/design/design-components#components
-[commands]: https://docs.improbable.io/reference/13.8/shared/design/commands#component-commands
-[worker flags]: https://docs.improbable.io/reference/13.8/shared/worker-configuration/worker-flags#worker-flags
-[worker-flag set]: https://docs.improbable.io/reference/13.8/shared/spatial-cli/spatial-project-deployment-worker-flag-set#spatial-project-deployment-worker-flag-set
-[entity query]: https://docs.improbable.io/reference/13.8/csharpsdk/using/sending-data#entity-queries
-[deployment configuration]: https://docs.improbable.io/reference/13.8/shared/project-layout/launch-config#reference-format
-[`Improbable/Postgres/Improbable.Postgres.Schema/schema/improbable/postgres/postgres.schema`]: ./Improbable/Postgres/Improbable.Postgres.Schema/schema/improbable/postgres/postgres.schema
-[`Improbable/DatabaseSync/Improbable.DatabaseSync.Schema/schema/improbable/database_sync/database_sync.schema`]: ./Improbable/DatabaseSync/Improbable.DatabaseSync.Schema/schema/improbable/database_sync/database_sync.schema
-[database_sync.schema]: ./Improbable/DatabaseSync/Improbable.DatabaseSync.Schema/schema/improbable/database_sync/database_sync.schema
-[Command Response]: https://docs.improbable.io/reference/13.8/csharpsdk/api-reference#improbable-worker-commandresponseop-c-struct
-[System Entities]: https://docs.improbable.io/reference/13.8/shared/design/system-entities#system-entities
-[Structured Project Layout]: https://docs.improbable.io/reference/13.8/shared/glossary#structured-project-layout-spl
-[Flexible Project Layout]: https://docs.improbable.io/reference/13.8/shared/glossary#flexible-project-layout-fpl
-[schema compiler]: https://docs.improbable.io/reference/13.8/shared/schema/introduction#schema-compiler-cli-reference
 
 # License
 
@@ -357,3 +337,26 @@ This software is licensed under MIT. See the [LICENSE](./LICENSE.md) file for de
 
 We currently don't accept PRs from external contributors - sorry about that! We do accept bug reports and feature requests in the form of issues, though.
 
+[worker project]: https://github.com/improbable/dotnet_core_worker/README.md
+[launch configuration]: https://docs.improbable.io/reference/latest/shared/project-layout/launch-configuration#worker-launch-configuration
+[schema]: https://docs.improbable.io/reference/latest/shared/schema/reference
+[ltree]: https://www.postgresql.org/docs/current/ltree.html
+[annotations]: https://docs.improbable.io/reference/latest/shared/schema/reference#annotations
+[layers]: https://docs.improbable.io/reference/latest/shared/concepts/layers#layers
+[ACLs]: https://docs.improbable.io/reference/latest/javasdk/using/creating-and-deleting-entities#entity-acls
+[components]: https://docs.improbable.io/reference/latest/shared/design/design-components#components
+[commands]: https://docs.improbable.io/reference/latest/shared/design/commands#component-commands
+[worker flags]: https://docs.improbable.io/reference/latest/shared/worker-configuration/worker-flags#worker-flags
+[worker-flag set]: https://docs.improbable.io/reference/latest/shared/spatial-cli/spatial-project-deployment-worker-flag-set#spatial-project-deployment-worker-flag-set
+[entity query]: https://docs.improbable.io/reference/latest/csharpsdk/using/sending-data#entity-queries
+[deployment configuration]: https://docs.improbable.io/reference/latest/shared/project-layout/launch-config#reference-format
+[`Improbable/Postgres/Improbable.Postgres.Schema/schema/improbable/postgres/postgres.schema`]: ./Improbable/Postgres/Improbable.Postgres.Schema/schema/improbable/postgres/postgres.schema
+[`Improbable/DatabaseSync/Improbable.DatabaseSync.Schema/schema/improbable/database_sync/database_sync.schema`]: ./Improbable/DatabaseSync/Improbable.DatabaseSync.Schema/schema/improbable/database_sync/database_sync.schema
+[database_sync.schema]: ./Improbable/DatabaseSync/Improbable.DatabaseSync.Schema/schema/improbable/database_sync/database_sync.schema
+[Command Response]: https://docs.improbable.io/reference/latest/csharpsdk/api-reference#improbable-worker-commandresponseop-c-struct
+[System Entities]: https://docs.improbable.io/reference/latest/shared/design/system-entities#system-entities
+[Structured Project Layout]: https://docs.improbable.io/reference/latest/shared/glossary#structured-project-layout-spl
+[Flexible Project Layout]: https://docs.improbable.io/reference/latest/shared/glossary#flexible-project-layout-fpl
+[schema compiler]: https://docs.improbable.io/reference/latest/shared/schema/introduction#schema-compiler-cli-reference
+[Example Project]: https://github.com/spatialos/UnrealGDKExampleProject
+[this tutorial]: TODO
