@@ -1,4 +1,5 @@
 # Database Sync Worker (preview)
+[![Build status](https://badge.buildkite.com/eb40ef8885282f2482f0f0b4e0f2a93e1a6cf89e6541022108.svg)](https://buildkite.com/improbable/database-sync-worker-premerge) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 The Database Sync Worker is a SpatialOS server-worker designed to easily sync and persist cross-session game data (such as player inventories) between SpatialOS and an external database.
 
