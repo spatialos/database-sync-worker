@@ -53,7 +53,7 @@ namespace Bootstrap
                 Log.Information("Running {Sql}", sql);
 
                 using (var connection = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using(var cmd = connection.Command(sql))
+                using (var cmd = connection.Command(sql))
                 {
                     cmd.Command.ExecuteNonQuery();
                 }

@@ -6,7 +6,7 @@ namespace DatabaseSyncWorker
 {
     internal interface IOptions : IWorkerOptions, IPostgresOptions
     {
-        [Option("postgres-from-worker-flags", HelpText="If set, the worker will prefer to use postgres worker flags over environment variables or command line options.")]
+        [Option("postgres-from-worker-flags", HelpText = "If set, the worker will prefer to use postgres worker flags over environment variables or command line options.")]
         bool PostgresFromWorkerFlags { get; set; }
     }
 }

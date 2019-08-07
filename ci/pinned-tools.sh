@@ -17,7 +17,7 @@ function deleteSecret() {
 function getSecret() {
     if [[ "${BUILDKITE:-}" ]]; then
         export SPATIAL_OAUTH_DIR=$(mktemp -d)
-        local SPATIAL_OAUTH_FILE="${SPATIAL_OAUTH_DIR}/oauth2_refresh_token"
+        local SPATIAL_OAUTH_FILE="${SPATIAL_OAUTH_DIR}/oauth2/oauth2_refresh_token"
 
         imp-ci secrets read \
             --environment="production" \

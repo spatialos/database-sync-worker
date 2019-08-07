@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp2.2</TargetFramework>
@@ -15,9 +15,9 @@
 
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.5.0" />
-    <PackageReference Include="Improbable.Stdlib" Version="0.0.1-preview" />
-    <PackageReference Include="Improbable.WorkerSdkInterop" Version="13.8.1" />
-    <PackageReference Include="Improbable.Postgres" Version="0.0.1-preview" />
+    <PackageReference Include="Improbable.Stdlib" Version="0.0.2-preview" />
+    <PackageReference Include="Improbable.WorkerSdkInterop" Version="13.8.2" />
+    <PackageReference Include="Improbable.Postgres" Version="0.0.2-preview" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="Npgsql" Version="4.0.7" />
     <PackageReference Include="Serilog" Version="2.8.0" />

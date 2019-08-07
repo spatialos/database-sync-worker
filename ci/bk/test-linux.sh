@@ -6,6 +6,8 @@ cd "$(dirname "$0")/../../"
 
 source "ci/pinned-tools.sh"
 
+export LOCAL_USER_ID=`id -u`
+
 startDockerCompose ./ci/docker/docker-compose.yml
 
-dc exec -T dotnet /bin/bash -c "./ci/test.sh"
+dc exec -T dotnet gosu user /bin/bash -c "./ci/test.sh"

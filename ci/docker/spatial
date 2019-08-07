@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-
-real_spatial --oauth2_client_cli_token_directory=/var/spatial_oauth/ $@
