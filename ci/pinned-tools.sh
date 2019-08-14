@@ -2,6 +2,8 @@
 
 declare -a EXIT_TRAPS
 
+export LOCAL_USER_ID=`id -u`
+
 function onExit() {
     for i in "${!EXIT_TRAPS[@]}"; do
         ${EXIT_TRAPS[$i]};
