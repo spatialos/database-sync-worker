@@ -14,9 +14,6 @@ launchSettings.json
 GeneratedCode/gen/
 CSharpCodeGenerator/CSharpCodeGenerator.Test/gen/
 
-# Ignore Worker SDK files that are downloaded in place in order to create Nuget packages.
-Improbable/
-
 # Local nuget packages source
 nupkgs/
 .nupkg_src/
