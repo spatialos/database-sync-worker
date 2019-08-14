@@ -101,20 +101,27 @@ namespace DatabaseSyncWorker
             using (var connection = await WorkerConnection.ConnectAsync(options, connectionParameters))
             {
                 var postgresOptions = new PostgresOptions(GetPostgresFlags(options, connection));
+                DatabaseSyncLogic databaseLogic = null;
 
                 using (var databaseChanges = new DatabaseChanges<DatabaseSyncItem.DatabaseChangeNotification>(postgresOptions))
                 {
-                    var databaseService = GetDatabaseSyncServiceAsync(connection);
-                    DatabaseSyncLogic databaseLogic = null;
+                    var databaseService = Task.Run(async () =>
+                    {
+                        using (var response = await connection.SendEntityQueryRequest(new EntityQuery { Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType() }))
+                        {
+                            if (response.ResultCount == 0)
+                            {
+                                throw new ServiceNotFoundException(nameof(DatabaseSyncService));
+                            }
+
+                            databaseLogic = new DatabaseSyncLogic(postgresOptions, connection, response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
+                            connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
+                        }
+                    });
+
 
                     foreach (var opList in connection.GetOpLists(TimeSpan.FromMilliseconds(16)))
                     {
-                        if (databaseLogic == null && databaseService.IsCompleted)
-                        {
-                            databaseLogic = new DatabaseSyncLogic(postgresOptions, connection, databaseService.Result.Key, databaseService.Result.Value);
-                            connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
-                        }
-
                         var changes = databaseChanges.GetChanges();
 
                         if (!changes.IsEmpty)
@@ -131,6 +138,9 @@ namespace DatabaseSyncWorker
 
                         connection.ProcessOpList(opList);
                         databaseLogic?.ProcessOpList(opList);
+
+                        // Propagate exceptions.
+                        databaseService.Wait(1);
                     }
                 }
             }
@@ -160,22 +170,6 @@ namespace DatabaseSyncWorker
 
                 return PostgresOptions.GetFromIOptions(options, key, value);
             };
-        }
-
-        private static Task<KeyValuePair<EntityId, DatabaseSyncService>> GetDatabaseSyncServiceAsync(WorkerConnection connection)
-        {
-            return Task.Run(async () =>
-            {
-                using (var response = await connection.SendEntityQueryRequest(new EntityQuery { Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType() }))
-                {
-                    if (response.ResultCount == 0)
-                    {
-                        throw new ServiceNotFoundException(nameof(DatabaseSyncService));
-                    }
-
-                    return new KeyValuePair<EntityId, DatabaseSyncService>(response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
-                }
-            });
         }
 
         private static void ProcessOpList(OpList opList)
