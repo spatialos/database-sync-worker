@@ -140,7 +140,7 @@ namespace DatabaseSyncWorker
                         databaseLogic?.ProcessOpList(opList);
 
                         // Propagate exceptions.
-                        databaseService.Wait(1);
+                        databaseService.Wait(TimeSpan.FromTicks(1));
                     }
                 }
             }
