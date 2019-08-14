@@ -20,7 +20,7 @@ namespace DatabaseSyncWorker
 {
     public class DatabaseSyncLogic : IDisposable
     {
-        private static readonly UpdateParameters NoLoopbackParameters = new UpdateParameters {Loopback = ComponentUpdateLoopback.None};
+        private static readonly UpdateParameters NoLoopbackParameters = new UpdateParameters { Loopback = ComponentUpdateLoopback.None };
 
         private static IReadOnlyDictionary<uint, Reflection.HydrationType> restoreComponents;
         private readonly ConcurrentDictionary<string, string> clientWorkers = new ConcurrentDictionary<string, string>();
@@ -31,7 +31,7 @@ namespace DatabaseSyncWorker
         private readonly ConcurrentDictionary<string, EntityId> profileToEntityId = new ConcurrentDictionary<string, EntityId>();
         private readonly DatabaseSyncService.CommandSenderBinding service;
         private readonly HashSet<string> writeWorkerTypes;
-        private PostgresOptions postgresOptions;
+        private readonly PostgresOptions postgresOptions;
         private long concurrentBatchRequests;
         private readonly MetricsPusher metricsPusher;
 
@@ -587,7 +587,11 @@ namespace DatabaseSyncWorker
                             service.SendBatchResponse(commandRequestOp.RequestId, new BatchOperationResponse(responses));
                         }
 
-                        Log.Debug("Concurrent batch operations {Count}", concurrentBatchRequests);
+                        if (concurrentBatchRequests > 1)
+                        {
+                            Log.Debug("Concurrent batch operations {Count}", concurrentBatchRequests);
+                        }
+
                         Interlocked.Decrement(ref concurrentBatchRequests);
                     }
                 }
@@ -715,7 +719,7 @@ namespace DatabaseSyncWorker
             try
             {
                 Log.Debug("Hydrating {Profile} {EntityId}...", profileId, entityId);
-                var children = await service.SendGetItemsAsync(new GetItemsRequest(profileId, GetItemDepth.Recursive, connection.WorkerId), null, new CommandParameters {AllowShortCircuiting = true})
+                var children = await service.SendGetItemsAsync(new GetItemsRequest(profileId, GetItemDepth.Recursive, connection.WorkerId), null, new CommandParameters { AllowShortCircuiting = true })
                     .ConfigureAwait(false);
 
                 var update = HydrateComponents[componentId].Hydrate(children.Items, profileId);
@@ -818,7 +822,7 @@ namespace DatabaseSyncWorker
                         var path = cmd.Command.ExecuteScalar();
                         if (path == null)
                         {
-                            connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InternalError);
+                            connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
                             return;
                         }
 

@@ -52,3 +52,10 @@ steps:
     artifact_paths:
       - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
     <<: *windows
+
+    # Wait for successful build on this pipeline before kicking off dependent pipelines.
+  - wait
+
+  - label: "upload-pipeline"
+    command: "mkdir -p nupkgs && dotnet run --project scripts/GetDependentBranchNames | buildkite-agent pipeline upload"
+    <<: *linux

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -8,6 +9,7 @@ using Improbable.DatabaseSync;
 using Improbable.Stdlib;
 using Improbable.Postgres;
 using Improbable.Worker.CInterop;
+using Improbable.Worker.CInterop.Query;
 using Npgsql.Logging;
 using Serilog;
 using OpList = Improbable.Stdlib.OpList;
@@ -67,7 +69,6 @@ namespace DatabaseSyncWorker
             }
 
             return 0;
-
         }
 
         private static async Task RunAsync(IOptions options)
@@ -99,33 +100,25 @@ namespace DatabaseSyncWorker
 
             using (var connection = await WorkerConnection.ConnectAsync(options, connectionParameters))
             {
-                var postgresOptions = new PostgresOptions((key, value) =>
-                {
-                    if (options.PostgresFromWorkerFlags)
-                    {
-                        var flagValue = connection.GetWorkerFlag(key);
-
-                        if (!string.IsNullOrEmpty(flagValue))
-                        {
-                            return string.IsNullOrEmpty(flagValue) ? value : flagValue;
-                        }
-                    }
-
-                    var envFlag = Environment.GetEnvironmentVariable(key.ToUpperInvariant());
-                    if(!string.IsNullOrEmpty(envFlag))
-                    {
-                        return envFlag;
-                    }
-
-                    return PostgresOptions.GetFromIOptions(options, key, value);
-                });
+                var postgresOptions = new PostgresOptions(GetPostgresFlags(options, connection));
+                DatabaseSyncLogic databaseLogic = null;
 
                 using (var databaseChanges = new DatabaseChanges<DatabaseSyncItem.DatabaseChangeNotification>(postgresOptions))
                 {
-                    var (entityId, entity) = connection.FindServiceEntities(DatabaseSyncService.ComponentId).First();
-                    var databaseLogic = new DatabaseSyncLogic(postgresOptions, connection, entityId, DatabaseSyncService.CreateFromSnapshot(entity));
+                    var databaseService = Task.Run(async () =>
+                    {
+                        using (var response = await connection.SendEntityQueryRequest(new EntityQuery { Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType() }))
+                        {
+                            if (response.ResultCount == 0)
+                            {
+                                throw new ServiceNotFoundException(nameof(DatabaseSyncService));
+                            }
 
-                    connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
+                            databaseLogic = new DatabaseSyncLogic(postgresOptions, connection, response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
+                            connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
+                        }
+                    });
+
 
                     foreach (var opList in connection.GetOpLists(TimeSpan.FromMilliseconds(16)))
                     {
@@ -133,7 +126,7 @@ namespace DatabaseSyncWorker
 
                         if (!changes.IsEmpty)
                         {
-                            databaseLogic.ProcessDatabaseSyncChanges(changes);
+                            databaseLogic?.ProcessDatabaseSyncChanges(changes);
                         }
 
                         ProcessOpList(opList);
@@ -144,7 +137,10 @@ namespace DatabaseSyncWorker
                         }
 
                         connection.ProcessOpList(opList);
-                        databaseLogic.ProcessOpList(opList);
+                        databaseLogic?.ProcessOpList(opList);
+
+                        // Propagate exceptions.
+                        databaseService.Wait(TimeSpan.FromTicks(1));
                     }
                 }
             }
@@ -152,38 +148,43 @@ namespace DatabaseSyncWorker
             Log.Information("Disconnected from SpatialOS");
         }
 
-        private static void ProcessOpList(OpList opList)
+        private static PostgresOptions.GetStringDelegate GetPostgresFlags(IOptions options, WorkerConnection connection)
         {
-            foreach (var logOp in opList.OfOpType<LogMessageOp>())
+            return (key, value) =>
             {
-                switch (logOp.Level)
+                if (options.PostgresFromWorkerFlags)
                 {
-                    case LogLevel.Debug:
-                        Log.Debug(logOp.Message);
-                        break;
-                    case LogLevel.Info:
-                        Log.Information(logOp.Message);
-                        break;
-                    case LogLevel.Warn:
-                        Log.Warning(logOp.Message);
-                        break;
-                    case LogLevel.Error:
-                        Log.Error(logOp.Message);
-                        break;
-                    case LogLevel.Fatal:
-                        Log.Fatal(logOp.Message);
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException();
+                    var flagValue = connection.GetWorkerFlag(key);
+
+                    if (!string.IsNullOrEmpty(flagValue))
+                    {
+                        return flagValue;
+                    }
                 }
 
-                break;
-            }
+                var envFlag = Environment.GetEnvironmentVariable(key.ToUpperInvariant());
+                if (!string.IsNullOrEmpty(envFlag))
+                {
+                    return envFlag;
+                }
 
+                return PostgresOptions.GetFromIOptions(options, key, value);
+            };
+        }
+
+        private static void ProcessOpList(OpList opList)
+        {
             foreach (var disconnectOp in opList.OfOpType<DisconnectOp>())
             {
                 Log.Information(disconnectOp.Reason);
             }
+        }
+    }
+
+    internal class ServiceNotFoundException : Exception
+    {
+        public ServiceNotFoundException(string typeName) : base($"{typeName} not found. Is your snapshot correct?")
+        {
         }
     }
 }

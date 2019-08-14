@@ -24,6 +24,6 @@
   <!-- CONFIGURATION POINT -->
   <!-- This is ;-separated list of schema input directories from your project. -->
   <ItemGroup>
-    <SchemaInputDir Include="$(SolutionDir)\schema" />
+    <SchemaInputDir Include="$(SolutionDir)\schema;$(AdditionalSchemaInputDir)" />
   </ItemGroup>
 </Project>
