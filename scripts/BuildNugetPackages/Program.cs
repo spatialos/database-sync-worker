@@ -32,7 +32,8 @@ namespace BuildNugetPackages
             {
                 Parser.Default.ParseArguments<LocalOptions, GitOptions>(args)
                     .WithParsed<LocalOptions>(BuildLocal)
-                    .WithParsed<GitOptions>(BuildGit);
+                    .WithParsed<GitOptions>(BuildGit)
+                    .WithNotParsed(errors => throw new Exception("Failed to parse command line"));
             }
             catch (Exception e)
             {
