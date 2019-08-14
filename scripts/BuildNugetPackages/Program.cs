@@ -1,7 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using CommandLine;
 using Medallion.Shell;
 
@@ -10,6 +10,8 @@ namespace BuildNugetPackages
     internal class Program
     {
         private static readonly Shell shell = new Shell(options => options.ThrowOnError());
+
+        private const string CSharpWorkerRepo = "https://github.com/spatialos/csharp-worker-template.git";
 
         private static int Main(string[] args)
         {
@@ -21,6 +23,31 @@ namespace BuildNugetPackages
                 args = new[] {"git"};
 
                 var templateBranch = Environment.GetEnvironmentVariable("CSHARP_TEMPLATE_BRANCH");
+
+                if (string.IsNullOrEmpty(templateBranch))
+                {
+                    // Default to "master", unless the downstream dependency has a branch matching the same name, then use that.
+                    var currentBranch = Environment.GetEnvironmentVariable("BUILDKITE_BRANCH");
+
+                    if (string.IsNullOrEmpty(currentBranch))
+                    {
+                        // We're running locally, get the current branch name.
+                        var currentLines = new List<string>();
+                        shell.Run("git", "rev-parse", "--abbrev-ref", "HEAD")
+                            .RedirectTo(currentLines)
+                            .RedirectStandardErrorTo(Console.Error)
+                            .Wait();
+                        currentBranch = currentLines.First().Trim();
+                    }
+
+                    var lines = new List<string>();
+                    shell.Run("git", "ls-remote", "--heads", CSharpWorkerRepo, currentBranch)
+                        .RedirectTo(lines)
+                        .RedirectStandardErrorTo(Console.Error)
+                        .Wait();
+
+                    templateBranch = lines.Any() && lines.First().Contains(currentBranch) ? currentBranch : "master";
+                }
 
                 if (!string.IsNullOrEmpty(templateBranch))
                 {
@@ -58,8 +85,14 @@ namespace BuildNugetPackages
 
             Console.Out.WriteLine($"Building NuGet packages from {git.Repository} {git.Branch}@{git.Commit}");
 
-            shell.Run("git", "clone", git.Repository, nugetSourceDir, "-b", git.Branch, "--single-branch", "--quiet").RedirectTo(Console.Out).RedirectStandardErrorTo(Console.Error).Wait();
-            shell.Run("git", new[] { "checkout", git.Commit, "--quiet" }, options => options.WorkingDirectory(nugetSourceDir)).RedirectTo(Console.Out).RedirectStandardErrorTo(Console.Error).Wait();
+            shell.Run("git", "clone", git.Repository, nugetSourceDir, "-b", git.Branch, "--single-branch", "--quiet")
+                .RedirectTo(Console.Out)
+                .RedirectStandardErrorTo(Console.Error)
+                .Wait();
+
+            shell.Run("git", new[] { "checkout", git.Commit, "--quiet" }, options => options.WorkingDirectory(nugetSourceDir))
+                .RedirectTo(Console.Out)
+                .RedirectStandardErrorTo(Console.Error).Wait();
 
             BuildPackages(nugetSourceDir);
         }
@@ -67,6 +100,7 @@ namespace BuildNugetPackages
         private static void BuildPackages(string nugetSourceDir)
         {
             Console.Out.WriteLine("Building NuGet packages...");
+
             // The environment variable overrides all other settings and defaults:
             // https://docs.microsoft.com/en-us/nuget/consume-packages/managing-the-global-packages-and-cache-folders
             var cachePath = Environment.GetEnvironmentVariable("NUGET_PACKAGES") ??
@@ -80,11 +114,17 @@ namespace BuildNugetPackages
 
             // For simplicity, some packages depend on Improbable.WorkerSdkInterop. Make sure that's packaged first in the source directory.
             shell.Run("dotnet", "pack", $"\"{sdkInteropDir}\"", "--verbosity:quiet", "-p:Platform=x64", "--output",
-                $"\"{Path.GetFullPath(Path.Combine(nugetSourceDir, "nupkgs"))}\"").RedirectTo(Console.Out).RedirectStandardErrorTo(Console.Error).Wait();
+                $"\"{Path.GetFullPath(Path.Combine(nugetSourceDir, "nupkgs"))}\"")
+                .RedirectTo(Console.Out)
+                .RedirectStandardErrorTo(Console.Error)
+                .Wait();
 
             // Now build everything into the worker's directory.
             shell.Run("dotnet", "pack", $"\"{Path.Combine(nugetSourceDir, "Improbable")}\"", "--verbosity:quiet",
-                "-p:Platform=x64", "--output", $"\"{localNugetPackages}\"").RedirectTo(Console.Out).RedirectStandardErrorTo(Console.Error).Wait();
+                "-p:Platform=x64", "--output", $"\"{localNugetPackages}\"")
+                .RedirectTo(Console.Out)
+                .RedirectStandardErrorTo(Console.Error)
+                .Wait();
 
             Console.Out.WriteLine("Built NuGet packages.");
         }
@@ -136,7 +176,7 @@ namespace BuildNugetPackages
         [Verb("git")]
         private class GitOptions
         {
-            [Option("repository", Default = "https://github.com/spatialos/csharp-worker-template.git")]
+            [Option("repository", Default = CSharpWorkerRepo)]
             public string Repository { get; set; }
 
             [Option("branch", Default = "master")] public string Branch { get; set; }
