@@ -10,3 +10,4 @@ services:
     environment:
         - CSHARP_TEMPLATE_BRANCH=${CSHARP_TEMPLATE_BRANCH}
         - IMPROBABLE_CONFIG_DIR=/var/spatial_oauth/
+        - BUILDKITE_BRANCH=${BUILDKITE_BRANCH}
