@@ -15,6 +15,8 @@ namespace DatabaseSyncWorker
         public string SpatialOsHost { get; set; }
         public ushort SpatialOsPort { get; set; }
         public string Token { get; set; }
+        public string DisplayName { get; set; }
+        public string PlayerId { get; set; }
         public string PostgresHost { get; set; }
         public string PostgresUserName { get; set; }
         public string PostgresPassword { get; set; }
