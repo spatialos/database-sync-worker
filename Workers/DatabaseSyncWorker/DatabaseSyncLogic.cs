@@ -195,10 +195,6 @@ namespace DatabaseSyncWorker
                         HandleDeleteRequest(commandRequestOp);
 
                         break;
-                    case DatabaseSyncService.Commands.GetMetrics:
-                        DatabaseSyncService.SendGetMetricsResponse(connection, commandRequestOp.RequestId, new GetMetricsResponse(ImmutableDictionary<uint, long>.Empty, Improbable.Postgres.Metrics.GetCounts(), Improbable.Postgres.Metrics.GetTimingStats()));
-
-                        break;
 
                     case DatabaseSyncService.Commands.Batch:
                         HandleBatch(commandRequestOp);
