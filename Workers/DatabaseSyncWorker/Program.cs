@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -39,9 +38,8 @@ namespace DatabaseSyncWorker
 
             IOptions options = null;
 
-            Parser.Default.ParseArguments<ReceptionistOptions, LocatorOptions>(args)
-                .WithParsed<ReceptionistOptions>(opts => options = opts)
-                .WithParsed<LocatorOptions>(opts => options = opts);
+            Parser.Default.ParseArguments<ReceptionistOptions>(args)
+                .WithParsed(opts => options = opts);
 
             if (options == null)
             {
@@ -118,7 +116,6 @@ namespace DatabaseSyncWorker
                             connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
                         }
                     });
-
 
                     foreach (var opList in connection.GetOpLists(TimeSpan.FromMilliseconds(16)))
                     {

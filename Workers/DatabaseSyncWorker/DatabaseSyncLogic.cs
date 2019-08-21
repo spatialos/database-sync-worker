@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Improbable.DatabaseSync;
 using Improbable.Stdlib;
 using Improbable.Postgres;
+using Improbable.Restricted;
 using Improbable.Worker.CInterop;
 using Npgsql;
 using NpgsqlTypes;
@@ -22,8 +23,14 @@ namespace DatabaseSyncWorker
     {
         private static readonly UpdateParameters NoLoopbackParameters = new UpdateParameters { Loopback = ComponentUpdateLoopback.None };
 
+        private readonly ComponentCollection<PlayerClient> clients = PlayerClient.CreateComponentCollection();
+        private readonly ComponentCollection<Worker> workers = Worker.CreateComponentCollection();
+        private readonly WhenAllComponents whenWorker = new WhenAllComponents(Worker.ComponentId);
+        private readonly WhenAllComponents whenWorkerClient = new WhenAllComponents(Worker.ComponentId, PlayerClient.ComponentId);
+
         private static IReadOnlyDictionary<uint, Reflection.HydrationType> restoreComponents;
         private readonly ConcurrentDictionary<string, string> clientWorkers = new ConcurrentDictionary<string, string>();
+        private readonly ConcurrentDictionary<string, string> adminWorkers = new ConcurrentDictionary<string, string>();
         private readonly WorkerConnection connection;
         private readonly EntityId serviceEntityId;
         private readonly Dictionary<uint, WhenAllComponents> hydrateAllComponents = new Dictionary<uint, WhenAllComponents>();
@@ -48,13 +55,13 @@ namespace DatabaseSyncWorker
                 hydrateAllComponents.Add(kv.Key, new WhenAllComponents(kv.Key));
             }
 
-            // Workers with write access implicitly have read access.
-            if (!serviceEntity.WriteWorkerAttributes.Any())
+            if (!serviceEntity.WriteWorkerTypes.Any())
             {
                 throw new Exception($"{nameof(DatabaseSyncService)} has no write worker types defined.");
             }
 
-            writeWorkerTypes = new HashSet<string>(serviceEntity.WriteWorkerAttributes);
+            writeWorkerTypes = new HashSet<string>(serviceEntity.WriteWorkerTypes);
+            adminWorkers.TryAdd(connection.WorkerId, connection.WorkerId);
 
             metricsPusher = new MetricsPusher(this.postgresOptions);
             metricsPusher.StartPushingMetrics(TimeSpan.FromSeconds(10));
@@ -64,6 +71,48 @@ namespace DatabaseSyncWorker
 
         public void ProcessOpList(OpList opList)
         {
+            whenWorker.ProcessOpList(opList);
+            whenWorkerClient.ProcessOpList(opList);
+
+            foreach (var workerEntityId in whenWorker.Deactivated)
+            {
+                if(clients.TryGet(workerEntityId, out var client))
+                {
+                    clientWorkers.TryRemove(client.PlayerIdentity.PlayerIdentifier, out var removed);
+                    Log.Debug("Signed out client {Id}", removed);
+                }
+                else if (workers.TryGet(workerEntityId, out var worker))
+                {
+                    adminWorkers.TryRemove(worker.WorkerId, out var _);
+                    Log.Debug("Signed out admin {Id}", worker.WorkerId);
+                }
+                else
+                {
+                    Log.Error("Unknown worker {EntityId}", workerEntityId);
+                }
+            }
+            
+            clients.ProcessOpList(opList);
+            workers.ProcessOpList(opList);
+
+            foreach (var entityId in whenWorkerClient.Activated)
+            {
+                if (clients.TryGet(entityId, out var client) && workers.TryGet(entityId, out var worker))
+                {
+                    Log.Debug("Logged in {Id} => {Path}", worker.WorkerId, client.PlayerIdentity.PlayerIdentifier);
+                    clientWorkers.AddOrUpdate(client.PlayerIdentity.PlayerIdentifier, worker.WorkerId, (_, __) => worker.WorkerId);
+                }
+            }
+
+            foreach (var entityId in whenWorker.Activated)
+            {
+                if (workers.TryGet(entityId, out var worker) && writeWorkerTypes.Contains(worker.WorkerType))
+                {
+                    Log.Debug("Logged in admin {Id} => {Type}", worker.WorkerId, worker.WorkerType);
+                    adminWorkers.TryAdd(worker.WorkerId, worker.WorkerType);
+                }
+            }
+
             foreach (var whenAll in hydrateAllComponents)
             {
                 whenAll.Value.ProcessOpList(opList);
@@ -148,10 +197,6 @@ namespace DatabaseSyncWorker
                         break;
                     case DatabaseSyncService.Commands.GetMetrics:
                         DatabaseSyncService.SendGetMetricsResponse(connection, commandRequestOp.RequestId, new GetMetricsResponse(ImmutableDictionary<uint, long>.Empty, Improbable.Postgres.Metrics.GetCounts(), Improbable.Postgres.Metrics.GetTimingStats()));
-
-                        break;
-                    case DatabaseSyncService.Commands.AssociatePathWithClient:
-                        HandleAssociatePathWithClient(commandRequestOp);
 
                         break;
 
@@ -681,8 +726,8 @@ namespace DatabaseSyncWorker
 
         private bool IsRequestValid(string clientWorkerId, string requestPath)
         {
-            // This worker always has access.
-            if (clientWorkerId == connection.WorkerId)
+            // Admin workers always have access.
+            if (adminWorkers.ContainsKey(clientWorkerId))
             {
                 return true;
             }
@@ -697,6 +742,7 @@ namespace DatabaseSyncWorker
 
             if (associatedWorkerId != clientWorkerId)
             {
+                Log.Error("Worker {WorkerId} is not associated with {Profile}", clientWorkerId, profileRoot);
                 return false;
             }
 
@@ -705,7 +751,7 @@ namespace DatabaseSyncWorker
 
         private bool CanWorkerTypeWrite(CommandRequestOp request)
         {
-            var canWorkerTypeWrite = writeWorkerTypes.Overlaps(request.CallerAttributeSet);
+            var canWorkerTypeWrite = adminWorkers.ContainsKey(request.CallerWorkerId);
             if (!canWorkerTypeWrite)
             {
                 Log.Error("{Types} not in {Attributes}", writeWorkerTypes, request.CallerAttributeSet);
@@ -732,60 +778,6 @@ namespace DatabaseSyncWorker
         }
 
         #region Command handlers
-
-        private void HandleAssociatePathWithClient(CommandRequestOp commandRequestOp)
-        {
-            var associateRequest = AssociatePathWithClientRequest.Create(commandRequestOp.Request.SchemaData);
-
-            if (string.IsNullOrEmpty(associateRequest.Path) || string.IsNullOrEmpty(associateRequest.ClientWorkerId))
-            {
-                Log.Error("Invalid {@Request}", associateRequest);
-                connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-
-                return;
-            }
-
-            if (!writeWorkerTypes.Overlaps(commandRequestOp.CallerAttributeSet))
-            {
-                Log.Error("Unauthorized {@Request}", associateRequest);
-                connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.Unauthorized);
-
-                return;
-            }
-
-            Task.Run(() =>
-            {
-                using (var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using (var cmd = wrapper.Command($"select count(path) from {wrapper.Connection.Database} where path <@ @path"))
-                {
-                    try
-                    {
-                        cmd.Command.Parameters.AddWithValue("path", NpgsqlDbType.Unknown, associateRequest.Path);
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$DATABASE", wrapper.Connection.Database);
-                        cmd.Command.Prepare();
-
-                        var countObject = cmd.Command.ExecuteScalar();
-
-                        if (countObject == null || (long) countObject == 0)
-                        {
-                            Log.Error("Invalid profileId {Path}", associateRequest.Path, associateRequest.ClientWorkerId);
-                            connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-                            return;
-                        }
-
-                        Log.Debug("{Path} => {Write}", associateRequest.Path, associateRequest.ClientWorkerId);
-
-                        clientWorkers.AddOrUpdate(associateRequest.Path, associateRequest.ClientWorkerId, (_, __) => associateRequest.ClientWorkerId);
-                        service.SendAssociatePathWithClientResponse(commandRequestOp.RequestId, new AssociatePathWithClientResponse());
-                    }
-                    catch (Exception e)
-                    {
-                        Log.Error(e, "{@Request}: {Sql} {Parameters}", associateRequest, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
-                        connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-                    }
-                }
-            });
-        }
 
         private void HandleSetParentRequest(CommandRequestOp commandRequestOp)
         {

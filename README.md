@@ -3,7 +3,7 @@
 
 The Database Sync Worker is a SpatialOS server-worker designed to easily sync and persist cross-session game data (such as player inventories) between SpatialOS and an external database.
 
-> If you intend to use this worker with the SpatialOS GDK for Unreal, we recommend following [this tutorial] instead of the below Setup guide. It takes you through integrating this worker in the [Example Project] and using it to store the “All Time Kills” and “Deaths” of the players in a Postgres database running on your local machine. 
+> If you intend to use this worker with the SpatialOS GDK for Unreal, we recommend following [this tutorial] instead of the below Setup guide. It takes you through integrating this worker in the [Example Project] and using it to store the “All Time Kills” and “Deaths” of the players in a Postgres database running on your local machine.
 
 ## Premise
 
@@ -180,12 +180,10 @@ The default recommended options are:
 ```
 "command": "DatabaseSyncWorker",
     "arguments": [
-    "receptionist",
-    "--spatialos-host", "${IMPROBABLE_RECEPTIONIST_HOST}",
-    "--spatialos-port", "${IMPROBABLE_RECEPTIONIST_PORT}",
-    "--worker-name", "${IMPROBABLE_WORKER_ID}",
-    "--logfile", "${IMPROBABLE_LOG_FILE}",
-    "--postgres-from-worker-flags"
+        "--spatialos-host", "${IMPROBABLE_RECEPTIONIST_HOST}",
+        "--spatialos-port", "${IMPROBABLE_RECEPTIONIST_PORT}",
+        "--worker-name", "${IMPROBABLE_WORKER_ID}",
+        "--logfile", "${IMPROBABLE_LOG_FILE}",
     ]
 ```
 
