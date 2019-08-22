@@ -32,7 +32,7 @@ function getSecret() {
         EXIT_TRAPS+=(deleteSecret)
     else
         # TODO: Support Linux/MacOS?
-        export SPATIAL_OAUTH_DIR="${APPDATA}/../Local/.improbable/oauth2/"
+        export SPATIAL_OAUTH_DIR="${LOCALAPPDATA}/.improbable/oauth2/"
     fi
 }
 
