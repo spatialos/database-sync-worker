@@ -200,8 +200,6 @@ namespace DatabaseSyncWorker
                         HandleBatch(commandRequestOp);
 
                         break;
-                    default:
-                        throw new ArgumentOutOfRangeException();
                 }
             }
         }
