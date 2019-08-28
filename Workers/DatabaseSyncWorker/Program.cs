@@ -96,27 +96,30 @@ namespace DatabaseSyncWorker
                 DefaultComponentVtable = new ComponentVtable()
             };
 
+
             using (var connection = await WorkerConnection.ConnectAsync(options, connectionParameters))
             {
                 var postgresOptions = new PostgresOptions(GetPostgresFlags(options, connection));
                 DatabaseSyncLogic databaseLogic = null;
 
-                using (var databaseChanges = new DatabaseChanges<DatabaseSyncItem.DatabaseChangeNotification>(postgresOptions))
+                var tableName = connection.GetWorkerFlag("postgres_tablename") ?? "postgres";
+
+                var databaseService = Task.Run(async () =>
                 {
-                    var databaseService = Task.Run(async () =>
+                    using (var response = await connection.SendEntityQueryRequest(new EntityQuery { Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType() }))
                     {
-                        using (var response = await connection.SendEntityQueryRequest(new EntityQuery { Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType() }))
+                        if (response.ResultCount == 0)
                         {
-                            if (response.ResultCount == 0)
-                            {
-                                throw new ServiceNotFoundException(nameof(DatabaseSyncService));
-                            }
-
-                            databaseLogic = new DatabaseSyncLogic(postgresOptions, connection, response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
-                            connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
+                            throw new ServiceNotFoundException(nameof(DatabaseSyncService));
                         }
-                    });
 
+                        databaseLogic = new DatabaseSyncLogic(postgresOptions, tableName, connection, response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
+                        connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
+                    }
+                });
+
+                using (var databaseChanges = new DatabaseChanges<DatabaseSyncItem.DatabaseChangeNotification>(postgresOptions, tableName))
+                {
                     foreach (var opList in connection.GetOpLists(TimeSpan.FromMilliseconds(16)))
                     {
                         var changes = databaseChanges.GetChanges();
