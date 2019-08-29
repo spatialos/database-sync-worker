@@ -81,13 +81,25 @@ namespace DatabaseSyncWorker
             {
                 if (clients.TryGet(workerEntityId, out var client))
                 {
-                    clientWorkers.TryRemove(client.PlayerIdentity.PlayerIdentifier, out var removed);
-                    Log.Debug("Signed out client {Id}", removed);
+                    if (clientWorkers.TryRemove(client.PlayerIdentity.PlayerIdentifier, out _))
+                    {
+                        Log.Debug("Signed out client {Id}", client.PlayerIdentity.PlayerIdentifier);
+                    }
+                    else
+                    {
+                        Log.Warning("Failed to sign out {Id}", client.PlayerIdentity.PlayerIdentifier);
+                    }
                 }
                 else if (workers.TryGet(workerEntityId, out var worker))
                 {
-                    adminWorkers.TryRemove(worker.WorkerId, out var _);
-                    Log.Debug("Signed out admin {Id}", worker.WorkerId);
+                    if (adminWorkers.TryRemove(worker.WorkerId, out _))
+                    {
+                        Log.Debug("Signed out admin {Id}", worker.WorkerId);
+                    }
+                    else
+                    {
+                        Log.Warning("Failed to sign out admin {Id}", worker.WorkerId);
+                    }
                 }
                 else
                 {
@@ -103,7 +115,7 @@ namespace DatabaseSyncWorker
                 if (clients.TryGet(entityId, out var client) && workers.TryGet(entityId, out var worker))
                 {
                     Log.Debug("Logged in {Id} => {Path}", worker.WorkerId, client.PlayerIdentity.PlayerIdentifier);
-                    clientWorkers.AddOrUpdate(client.PlayerIdentity.PlayerIdentifier, worker.WorkerId, (k, oldValue) => worker.WorkerId);
+                    clientWorkers.AddOrUpdate(client.PlayerIdentity.PlayerIdentifier, worker.WorkerId, (key, oldValue) => worker.WorkerId);
                 }
             }
 
@@ -112,7 +124,7 @@ namespace DatabaseSyncWorker
                 if (workers.TryGet(entityId, out var worker) && writeWorkerTypes.Contains(worker.WorkerType))
                 {
                     Log.Debug("Logged in admin {Id} => {Type}", worker.WorkerId, worker.WorkerType);
-                    adminWorkers.TryAdd(worker.WorkerId, worker.WorkerType);
+                    adminWorkers.AddOrUpdate(worker.WorkerId, worker.WorkerType, (key, oldValue) => worker.WorkerType);
                 }
             }
 
@@ -159,49 +171,46 @@ namespace DatabaseSyncWorker
                 .OfOpType<CommandRequestOp>()
                 .OfComponent(DatabaseSyncService.ComponentId))
             {
-                var commandIndex = commandRequestOp.Request.SchemaData?.GetCommandIndex();
+                var commandType = DatabaseSyncService.GetCommandType(commandRequestOp);
 
-                if (commandIndex.HasValue)
-                {
-                    Improbable.Postgres.Metrics.Inc("CommandIndex." + commandIndex.Value);
-                }
+                Improbable.Postgres.Metrics.Inc($"CommandIndex.{commandType}");
 
-                switch (DatabaseSyncService.GetCommandType(commandRequestOp))
+                switch (commandType)
                 {
                     case DatabaseSyncService.Commands.GetItem:
                         HandleGetItemRequest(commandRequestOp);
-
                         break;
+
                     case DatabaseSyncService.Commands.GetItems:
                         HandleGetItemsRequest(commandRequestOp);
-
                         break;
+
                     case DatabaseSyncService.Commands.Increment:
                         HandleIncrementRequest(commandRequestOp);
-
                         break;
+
                     case DatabaseSyncService.Commands.Decrement:
                         HandleDecrementRequest(commandRequestOp);
-
                         break;
+
                     case DatabaseSyncService.Commands.SetParent:
                         HandleSetParentRequest(commandRequestOp);
-
                         break;
 
                     case DatabaseSyncService.Commands.Create:
                         HandleCreateRequest(commandRequestOp);
-
                         break;
 
                     case DatabaseSyncService.Commands.Delete:
                         HandleDeleteRequest(commandRequestOp);
-
                         break;
 
                     case DatabaseSyncService.Commands.Batch:
                         HandleBatch(commandRequestOp);
+                        break;
 
+                    default:
+                        Log.Error("Unhandled commandType {CommandType}", commandType);
                         break;
                 }
             }

@@ -31,7 +31,7 @@ namespace DatabaseSyncWorker
                         connection = new NpgsqlConnection(connectionString);
                         connection.Open();
 
-                        Log.Information("Listening to {Database}", tableName);
+                        Log.Information("Listening to {TableName}", tableName);
 
                         connection.Notification += (sender, args) =>
                         {
@@ -54,7 +54,7 @@ namespace DatabaseSyncWorker
                     }
                     catch (Exception e)
                     {
-                        Log.Error(e, "LISTEN {TableName} to {Connection}", tableName, connectionString);
+                        Log.Error(e, "LISTEN {TableName}", tableName);
                     }
                     finally
                     {
