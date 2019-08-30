@@ -107,7 +107,7 @@ schema_compiler
 
 If your project is entirely .NET Core C# based, then you can simply add Nuget references to your `GeneratedCode` project:
 ```
-dotnet add GeneratedCode/GeneratedCode.csproj package "Improbable.Postgres.Schema" --version 0.0.2-preview
+dotnet add GeneratedCode/GeneratedCode.csproj package "Improbable.Postgres.Schema" --version 0.0.1-preview
 dotnet add GeneratedCode/GeneratedCode.csproj package "Improbable.DatabaseSync.Schema" --version 0.0.2-preview
 ```
 
