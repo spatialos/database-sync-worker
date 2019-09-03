@@ -140,7 +140,8 @@ namespace DatabaseSyncWorker
                     // Extract the profileId from the incoming schema data, to avoid needing to deserialize the whole object.
                     var ops = opList
                         .OfOpType<AddComponentOp>()
-                        .Where(op => op.Data.ComponentId == componentId && op.Data.SchemaData.HasValue && activated.Contains(op.EntityId))
+                        .OfComponent(componentId)
+                        .Where(op => op.Data.SchemaData.HasValue && activated.Contains(op.EntityId))
                         .ToDictionary(op => new EntityId(op.EntityId), op =>
                         {
                             var profile = HydrateComponents[componentId].ProfileIdFromSchemaData(op.Data.SchemaData.Value.GetFields());
@@ -157,13 +158,7 @@ namespace DatabaseSyncWorker
                         profileToEntityId.AddOrUpdate(kv.Value, kv.Key, (profile, entityId) => kv.Key);
                     }
 
-                    Task.Run(() =>
-                    {
-                        foreach (var entityId in activated)
-                        {
-                            var _ = HydrateComponentAsync(ops[entityId], componentId, entityId);
-                        }
-                    });
+                    Parallel.ForEach(activated, async entityId => await HydrateComponentAsync(ops[entityId], componentId, entityId));
                 }
             }
 
@@ -766,12 +761,12 @@ namespace DatabaseSyncWorker
             return canWorkerTypeWrite;
         }
 
-        private async Task HydrateComponentAsync(string profileId, uint componentId, EntityId entityId)
+        private async Task HydrateComponentAsync(string profileId, uint componentId, EntityId entityId, CancellationToken cancellation = default)
         {
             try
             {
                 Log.Debug("Hydrating {Profile} {EntityId}...", profileId, entityId);
-                var children = await service.SendGetItemsAsync(new GetItemsRequest(profileId, GetItemDepth.Recursive, connection.WorkerId), null, new CommandParameters { AllowShortCircuiting = true })
+                var children = await service.SendGetItemsAsync(new GetItemsRequest(profileId, GetItemDepth.Recursive, connection.WorkerId), cancellation, null, new CommandParameters { AllowShortCircuiting = true })
                     .ConfigureAwait(false);
 
                 var update = HydrateComponents[componentId].Hydrate(children.Items, profileId);
