@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Improbable.DatabaseSync;
 using Improbable.Stdlib;
 using Improbable.Postgres;
+using Improbable.Restricted;
 using Improbable.Worker.CInterop;
 using Npgsql;
 using NpgsqlTypes;
@@ -22,8 +23,14 @@ namespace DatabaseSyncWorker
     {
         private static readonly UpdateParameters NoLoopbackParameters = new UpdateParameters { Loopback = ComponentUpdateLoopback.None };
 
+        private readonly ComponentCollection<PlayerClient> clients = PlayerClient.CreateComponentCollection();
+        private readonly ComponentCollection<Worker> workers = Worker.CreateComponentCollection();
+        private readonly WhenAllComponents whenWorker = new WhenAllComponents(Worker.ComponentId);
+        private readonly WhenAllComponents whenWorkerClient = new WhenAllComponents(Worker.ComponentId, PlayerClient.ComponentId);
+
         private static IReadOnlyDictionary<uint, Reflection.HydrationType> restoreComponents;
         private readonly ConcurrentDictionary<string, string> clientWorkers = new ConcurrentDictionary<string, string>();
+        private readonly ConcurrentDictionary<string, string> adminWorkers = new ConcurrentDictionary<string, string>();
         private readonly WorkerConnection connection;
         private readonly EntityId serviceEntityId;
         private readonly Dictionary<uint, WhenAllComponents> hydrateAllComponents = new Dictionary<uint, WhenAllComponents>();
@@ -32,10 +39,11 @@ namespace DatabaseSyncWorker
         private readonly DatabaseSyncService.CommandSenderBinding service;
         private readonly HashSet<string> writeWorkerTypes;
         private readonly PostgresOptions postgresOptions;
+        private readonly string tableName;
         private long concurrentBatchRequests;
         private readonly MetricsPusher metricsPusher;
 
-        public DatabaseSyncLogic(PostgresOptions postgresOptions, WorkerConnection connection, EntityId serviceEntityId, in DatabaseSyncService serviceEntity)
+        public DatabaseSyncLogic(PostgresOptions postgresOptions, string tableName, WorkerConnection connection, EntityId serviceEntityId, in DatabaseSyncService serviceEntity)
         {
             this.postgresOptions = postgresOptions;
             this.connection = connection;
@@ -43,18 +51,20 @@ namespace DatabaseSyncWorker
 
             service = new DatabaseSyncService.CommandSenderBinding(connection, serviceEntityId);
 
+            this.tableName = tableName;
+
             foreach (var kv in HydrateComponents)
             {
                 hydrateAllComponents.Add(kv.Key, new WhenAllComponents(kv.Key));
             }
 
-            // Workers with write access implicitly have read access.
-            if (!serviceEntity.WriteWorkerAttributes.Any())
+            if (!serviceEntity.WriteWorkerTypes.Any())
             {
                 throw new Exception($"{nameof(DatabaseSyncService)} has no write worker types defined.");
             }
 
-            writeWorkerTypes = new HashSet<string>(serviceEntity.WriteWorkerAttributes);
+            writeWorkerTypes = new HashSet<string>(serviceEntity.WriteWorkerTypes);
+            adminWorkers.TryAdd(connection.WorkerId, connection.WorkerId);
 
             metricsPusher = new MetricsPusher(this.postgresOptions);
             metricsPusher.StartPushingMetrics(TimeSpan.FromSeconds(10));
@@ -64,6 +74,60 @@ namespace DatabaseSyncWorker
 
         public void ProcessOpList(OpList opList)
         {
+            whenWorker.ProcessOpList(opList);
+            whenWorkerClient.ProcessOpList(opList);
+
+            foreach (var workerEntityId in whenWorker.Deactivated)
+            {
+                if (clients.TryGet(workerEntityId, out var client))
+                {
+                    if (clientWorkers.TryRemove(client.PlayerIdentity.PlayerIdentifier, out _))
+                    {
+                        Log.Debug("Signed out client {Id}", client.PlayerIdentity.PlayerIdentifier);
+                    }
+                    else
+                    {
+                        Log.Warning("Failed to sign out {Id}", client.PlayerIdentity.PlayerIdentifier);
+                    }
+                }
+                else if (workers.TryGet(workerEntityId, out var worker))
+                {
+                    if (adminWorkers.TryRemove(worker.WorkerId, out _))
+                    {
+                        Log.Debug("Signed out admin {Id}", worker.WorkerId);
+                    }
+                    else
+                    {
+                        Log.Warning("Failed to sign out admin {Id}", worker.WorkerId);
+                    }
+                }
+                else
+                {
+                    Log.Error("Unknown worker {EntityId}", workerEntityId);
+                }
+            }
+
+            clients.ProcessOpList(opList);
+            workers.ProcessOpList(opList);
+
+            foreach (var entityId in whenWorkerClient.Activated)
+            {
+                if (clients.TryGet(entityId, out var client) && workers.TryGet(entityId, out var worker))
+                {
+                    Log.Debug("Logged in {Id} => {Path}", worker.WorkerId, client.PlayerIdentity.PlayerIdentifier);
+                    clientWorkers.AddOrUpdate(client.PlayerIdentity.PlayerIdentifier, worker.WorkerId, (key, oldValue) => worker.WorkerId);
+                }
+            }
+
+            foreach (var entityId in whenWorker.Activated)
+            {
+                if (workers.TryGet(entityId, out var worker) && writeWorkerTypes.Contains(worker.WorkerType))
+                {
+                    Log.Debug("Logged in admin {Id} => {Type}", worker.WorkerId, worker.WorkerType);
+                    adminWorkers.AddOrUpdate(worker.WorkerId, worker.WorkerType, (key, oldValue) => worker.WorkerType);
+                }
+            }
+
             foreach (var whenAll in hydrateAllComponents)
             {
                 whenAll.Value.ProcessOpList(opList);
@@ -107,60 +171,47 @@ namespace DatabaseSyncWorker
                 .OfOpType<CommandRequestOp>()
                 .OfComponent(DatabaseSyncService.ComponentId))
             {
-                var commandIndex = commandRequestOp.Request.SchemaData?.GetCommandIndex();
+                var commandType = DatabaseSyncService.GetCommandType(commandRequestOp);
 
-                if (commandIndex.HasValue)
-                {
-                    Improbable.Postgres.Metrics.Inc("CommandIndex." + commandIndex.Value);
-                }
+                Improbable.Postgres.Metrics.Inc($"CommandIndex.{commandType}");
 
-                switch (DatabaseSyncService.GetCommandType(commandRequestOp))
+                switch (commandType)
                 {
                     case DatabaseSyncService.Commands.GetItem:
                         HandleGetItemRequest(commandRequestOp);
-
                         break;
+
                     case DatabaseSyncService.Commands.GetItems:
                         HandleGetItemsRequest(commandRequestOp);
-
                         break;
+
                     case DatabaseSyncService.Commands.Increment:
                         HandleIncrementRequest(commandRequestOp);
-
                         break;
+
                     case DatabaseSyncService.Commands.Decrement:
                         HandleDecrementRequest(commandRequestOp);
-
                         break;
+
                     case DatabaseSyncService.Commands.SetParent:
                         HandleSetParentRequest(commandRequestOp);
-
                         break;
 
                     case DatabaseSyncService.Commands.Create:
                         HandleCreateRequest(commandRequestOp);
-
                         break;
 
                     case DatabaseSyncService.Commands.Delete:
                         HandleDeleteRequest(commandRequestOp);
-
-                        break;
-                    case DatabaseSyncService.Commands.GetMetrics:
-                        DatabaseSyncService.SendGetMetricsResponse(connection, commandRequestOp.RequestId, new GetMetricsResponse(ImmutableDictionary<uint, long>.Empty, Improbable.Postgres.Metrics.GetCounts(), Improbable.Postgres.Metrics.GetTimingStats()));
-
-                        break;
-                    case DatabaseSyncService.Commands.AssociatePathWithClient:
-                        HandleAssociatePathWithClient(commandRequestOp);
-
                         break;
 
                     case DatabaseSyncService.Commands.Batch:
                         HandleBatch(commandRequestOp);
-
                         break;
+
                     default:
-                        throw new ArgumentOutOfRangeException();
+                        Log.Error("Unhandled commandType {CommandType}", commandType);
+                        break;
                 }
             }
         }
@@ -193,7 +244,7 @@ namespace DatabaseSyncWorker
                     {
                         AddDeleteStatement(cmd.Command, deleteRequest);
 
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$DATABASE", wrapper.Connection.Database);
+                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
                         cmd.Command.Prepare();
 
                         var affected = cmd.Command.ExecuteNonQuery();
@@ -217,7 +268,7 @@ namespace DatabaseSyncWorker
 
         private void AddCreateStatement(NpgsqlCommand command, CreateRequest createRequest, string suffix = "")
         {
-            var query = $@"insert into $DATABASE (path, name, count) values(@path{suffix}, @name{suffix}, @count{suffix});";
+            var query = $@"insert into $TABLENAME (path, name, count) values(@path{suffix}, @name{suffix}, @count{suffix});";
             command.Parameters.AddWithValue($"name{suffix}", NpgsqlDbType.Text, createRequest.Item.Name);
             command.Parameters.AddWithValue($"path{suffix}", NpgsqlDbType.Unknown, createRequest.Item.Path);
             command.Parameters.AddWithValue($"count{suffix}", NpgsqlDbType.Bigint, createRequest.Item.Count);
@@ -227,7 +278,7 @@ namespace DatabaseSyncWorker
 
         private void AddDeleteStatement(NpgsqlCommand command, DeleteRequest deleteRequest, string suffix = "")
         {
-            var query = $@"delete from $DATABASE where path <@ @path{suffix};";
+            var query = $@"delete from $TABLENAME where path <@ @path{suffix};";
             command.Parameters.AddWithValue($"path{suffix}", NpgsqlDbType.Unknown, deleteRequest.Path);
 
             command.CommandText += query;
@@ -236,7 +287,7 @@ namespace DatabaseSyncWorker
         private void AddSetParentStatement(NpgsqlCommand command, SetParentRequest setParentRequest, string suffix = "")
         {
             // '||' is the string/ltree concatenation operator, that is, (newParent + subpath(path, nlevel(sourcePath) - 1)
-            var query = $"update $DATABASE set path = @newParent{suffix} || subpath(path, nlevel(@sourcePath) - 1) where path <@ @sourcePath{suffix} returning path::text;";
+            var query = $"update $TABLENAME set path = @newParent{suffix} || subpath(path, nlevel(@sourcePath) - 1) where path <@ @sourcePath{suffix} returning path::text;";
             command.Parameters.AddWithValue($"newParent{suffix}", NpgsqlDbType.Unknown, setParentRequest.NewParent);
             command.Parameters.AddWithValue($"sourcePath{suffix}", NpgsqlDbType.Unknown, setParentRequest.Path);
 
@@ -245,7 +296,7 @@ namespace DatabaseSyncWorker
 
         private void AddIncrementStatement(NpgsqlCommand command, IncrementRequest incrementRequest, string suffix = "")
         {
-            var query = $"update $DATABASE set count = count + @amount{suffix} where path ~ @itemPath{suffix} returning count;";
+            var query = $"update $TABLENAME set count = count + @amount{suffix} where path ~ @itemPath{suffix} returning count;";
             command.Parameters.AddWithValue($"itemPath{suffix}", NpgsqlDbType.Unknown, incrementRequest.Path);
             command.Parameters.AddWithValue($"amount{suffix}", NpgsqlDbType.Bigint, incrementRequest.Amount);
 
@@ -254,7 +305,7 @@ namespace DatabaseSyncWorker
 
         private void AddDecrementStatement(NpgsqlCommand command, DecrementRequest decrementRequest, string suffix = "")
         {
-            var query = $"update $DATABASE set count = count - @amount{suffix} where path ~ @itemPath{suffix} returning count;";
+            var query = $"update $TABLENAME set count = count - @amount{suffix} where path ~ @itemPath{suffix} returning count;";
             command.Parameters.AddWithValue($"itemPath{suffix}", NpgsqlDbType.Unknown, decrementRequest.Path);
             command.Parameters.AddWithValue($"amount{suffix}", NpgsqlDbType.Bigint, decrementRequest.Amount);
 
@@ -263,7 +314,7 @@ namespace DatabaseSyncWorker
 
         private void AddGetItemStatement(NpgsqlCommand command, GetItemRequest getItemRequest, string suffix = "")
         {
-            var query = $"select {DatabaseSyncItem.SelectClause} from $DATABASE where path ~ @path{suffix};";
+            var query = $"select {DatabaseSyncItem.SelectClause} from $TABLENAME where path ~ @path{suffix};";
             command.Parameters.AddWithValue($"path{suffix}", NpgsqlDbType.Unknown, getItemRequest.Path);
 
             command.CommandText += query;
@@ -271,7 +322,7 @@ namespace DatabaseSyncWorker
 
         private void AddGetDatabaseSyncStatement(NpgsqlCommand command, GetItemsRequest getItems, string suffix = "")
         {
-            var query = $"select {DatabaseSyncItem.SelectClause} from $DATABASE where path ~ @itemChildren{suffix};";
+            var query = $"select {DatabaseSyncItem.SelectClause} from $TABLENAME where path ~ @itemChildren{suffix};";
 
             switch (getItems.Depth)
             {
@@ -320,7 +371,7 @@ namespace DatabaseSyncWorker
                     try
                     {
                         AddCreateStatement(cmd.Command, createRequest);
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$DATABASE", wrapper.Connection.Database);
+                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
                         cmd.Command.Prepare();
                         cmd.Command.ExecuteNonQuery();
                     }
@@ -472,7 +523,7 @@ namespace DatabaseSyncWorker
                                     AddGetDatabaseSyncStatement(cmd.Command, op.GetItems.Value);
                                 }
 
-                                cmd.Command.CommandText = cmd.Command.CommandText.Replace("$DATABASE", wrapper.Connection.Database);
+                                cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
 
                                 try
                                 {
@@ -681,8 +732,8 @@ namespace DatabaseSyncWorker
 
         private bool IsRequestValid(string clientWorkerId, string requestPath)
         {
-            // This worker always has access.
-            if (clientWorkerId == connection.WorkerId)
+            // Admin workers always have access.
+            if (adminWorkers.ContainsKey(clientWorkerId))
             {
                 return true;
             }
@@ -697,6 +748,7 @@ namespace DatabaseSyncWorker
 
             if (associatedWorkerId != clientWorkerId)
             {
+                Log.Error("Worker {WorkerId} is not associated with {Profile}", clientWorkerId, profileRoot);
                 return false;
             }
 
@@ -705,7 +757,7 @@ namespace DatabaseSyncWorker
 
         private bool CanWorkerTypeWrite(CommandRequestOp request)
         {
-            var canWorkerTypeWrite = writeWorkerTypes.Overlaps(request.CallerAttributeSet);
+            var canWorkerTypeWrite = adminWorkers.ContainsKey(request.CallerWorkerId);
             if (!canWorkerTypeWrite)
             {
                 Log.Error("{Types} not in {Attributes}", writeWorkerTypes, request.CallerAttributeSet);
@@ -732,60 +784,6 @@ namespace DatabaseSyncWorker
         }
 
         #region Command handlers
-
-        private void HandleAssociatePathWithClient(CommandRequestOp commandRequestOp)
-        {
-            var associateRequest = AssociatePathWithClientRequest.Create(commandRequestOp.Request.SchemaData);
-
-            if (string.IsNullOrEmpty(associateRequest.Path) || string.IsNullOrEmpty(associateRequest.ClientWorkerId))
-            {
-                Log.Error("Invalid {@Request}", associateRequest);
-                connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-
-                return;
-            }
-
-            if (!writeWorkerTypes.Overlaps(commandRequestOp.CallerAttributeSet))
-            {
-                Log.Error("Unauthorized {@Request}", associateRequest);
-                connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.Unauthorized);
-
-                return;
-            }
-
-            Task.Run(() =>
-            {
-                using (var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using (var cmd = wrapper.Command($"select count(path) from {wrapper.Connection.Database} where path <@ @path"))
-                {
-                    try
-                    {
-                        cmd.Command.Parameters.AddWithValue("path", NpgsqlDbType.Unknown, associateRequest.Path);
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$DATABASE", wrapper.Connection.Database);
-                        cmd.Command.Prepare();
-
-                        var countObject = cmd.Command.ExecuteScalar();
-
-                        if (countObject == null || (long) countObject == 0)
-                        {
-                            Log.Error("Invalid profileId {Path}", associateRequest.Path, associateRequest.ClientWorkerId);
-                            connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-                            return;
-                        }
-
-                        Log.Debug("{Path} => {Write}", associateRequest.Path, associateRequest.ClientWorkerId);
-
-                        clientWorkers.AddOrUpdate(associateRequest.Path, associateRequest.ClientWorkerId, (_, __) => associateRequest.ClientWorkerId);
-                        service.SendAssociatePathWithClientResponse(commandRequestOp.RequestId, new AssociatePathWithClientResponse());
-                    }
-                    catch (Exception e)
-                    {
-                        Log.Error(e, "{@Request}: {Sql} {Parameters}", associateRequest, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
-                        connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-                    }
-                }
-            });
-        }
 
         private void HandleSetParentRequest(CommandRequestOp commandRequestOp)
         {
@@ -814,7 +812,7 @@ namespace DatabaseSyncWorker
                     try
                     {
                         AddSetParentStatement(cmd.Command, setParentRequest);
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$DATABASE", wrapper.Connection.Database);
+                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
                         cmd.Command.Prepare();
 
                         pendingUpdates.TryAdd(setParentRequest.Path, DateTime.Now);
@@ -875,7 +873,7 @@ namespace DatabaseSyncWorker
                     try
                     {
                         AddDecrementStatement(cmd.Command, decrementRequest);
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$DATABASE", wrapper.Connection.Database);
+                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
                         cmd.Command.Prepare();
 
                         pendingUpdates.TryAdd(decrementRequest.Path, DateTime.Now);
@@ -933,7 +931,7 @@ namespace DatabaseSyncWorker
                     try
                     {
                         AddIncrementStatement(cmd.Command, incrementRequest);
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$DATABASE", wrapper.Connection.Database);
+                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
                         cmd.Command.Prepare();
 
                         pendingUpdates.TryAdd(incrementRequest.Path, DateTime.Now);
@@ -1016,7 +1014,7 @@ namespace DatabaseSyncWorker
                     {
                         AddGetDatabaseSyncStatement(cmd.Command, getDatabaseSyncRequest);
 
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$DATABASE", wrapper.Connection.Database);
+                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
                         cmd.Command.Prepare();
 
                         using (var reader = cmd.Command.ExecuteReader())
@@ -1097,12 +1095,12 @@ namespace DatabaseSyncWorker
             Task.Run(() =>
             {
                 using (var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using (var cmd = wrapper.Command($"select {DatabaseSyncItem.SelectClause} from {wrapper.Connection.Database} where path ~ @path"))
+                using (var cmd = wrapper.Command($"select {DatabaseSyncItem.SelectClause} from {tableName} where path ~ @path"))
                 {
                     try
                     {
                         cmd.Command.Parameters.AddWithValue("path", NpgsqlDbType.Unknown, getItemRequest.Path);
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$DATABASE", wrapper.Connection.Database);
+                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
                         cmd.Command.Prepare();
 
                         using (var reader = cmd.Command.ExecuteReader())
@@ -1131,7 +1129,6 @@ namespace DatabaseSyncWorker
         private bool AuthorizeGetItem(GetItemRequest getItemRequest)
         {
             return IsRequestValid(getItemRequest.WorkerId, getItemRequest.Path);
-
         }
 
         public void Dispose()

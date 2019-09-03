@@ -15,11 +15,11 @@ namespace DatabaseSyncWorker
         private ImmutableArray<TType> changes = ImmutableArray<TType>.Empty;
         private CancellationTokenSource tcs;
 
-        public DatabaseChanges(PostgresOptions postgresOptions)
+        public DatabaseChanges(PostgresOptions postgresOptions, string tableName)
         {
             tcs = new CancellationTokenSource();
 
-            Task.Factory.StartNew(async _ =>
+            Task.Factory.StartNew(async unusedStateObject =>
             {
                 NpgsqlConnection connection = null;
 
@@ -31,7 +31,7 @@ namespace DatabaseSyncWorker
                         connection = new NpgsqlConnection(connectionString);
                         connection.Open();
 
-                        Log.Information("Listening to {Database}", connection.Database);
+                        Log.Information("Listening to {TableName}", tableName);
 
                         connection.Notification += (sender, args) =>
                         {
@@ -42,7 +42,7 @@ namespace DatabaseSyncWorker
                         };
 
                         // Receive notifications from the database when rows change.
-                        using (var cmd = new NpgsqlCommand($"LISTEN {connection.Database}", connection))
+                        using (var cmd = new NpgsqlCommand($"LISTEN {tableName}", connection))
                         {
                             cmd.ExecuteNonQuery();
                         }
@@ -54,13 +54,12 @@ namespace DatabaseSyncWorker
                     }
                     catch (Exception e)
                     {
-                        Log.Error(e, "LISTEN connection to {Connection}", connectionString);
+                        Log.Error(e, "LISTEN {TableName}", tableName);
                     }
                     finally
                     {
                         connection?.Dispose();
                     }
-
 
                     await Task.Delay(TimeSpan.FromSeconds(5));
                 }

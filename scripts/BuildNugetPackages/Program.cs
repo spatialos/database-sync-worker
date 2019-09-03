@@ -57,9 +57,10 @@ namespace BuildNugetPackages
 
             try
             {
-                Parser.Default.ParseArguments<LocalOptions, GitOptions>(args)
+                Parser.Default.ParseArguments<LocalOptions, GitOptions, PrintSchemaOptions>(args)
                     .WithParsed<LocalOptions>(BuildLocal)
                     .WithParsed<GitOptions>(BuildGit)
+                    .WithParsed<PrintSchemaOptions>(unused => { PrintSchemaLocations(); })
                     .WithNotParsed(errors => throw new Exception("Failed to parse command line"));
             }
             catch (Exception e)
@@ -69,6 +70,16 @@ namespace BuildNugetPackages
             }
 
             return 0;
+        }
+
+        private static void PrintSchemaLocations()
+        {
+            var cacheDirectory = GetCacheDirectory();
+            Console.Out.WriteLine("Find schema files in:");
+            Console.Out.WriteLine(
+                $"  {Path.Combine(cacheDirectory, "improbable.postgres.schema", "0.0.1-preview", "content", "schema")}");
+            Console.Out.WriteLine(
+                $"  {Path.Combine(cacheDirectory, "improbable.databasesync.schema", "0.0.2-preview", "content", "schema")}");
         }
 
         private static void BuildLocal(LocalOptions local)
@@ -101,20 +112,19 @@ namespace BuildNugetPackages
         {
             Console.Out.WriteLine("Building NuGet packages...");
 
-            // The environment variable overrides all other settings and defaults:
-            // https://docs.microsoft.com/en-us/nuget/consume-packages/managing-the-global-packages-and-cache-folders
-            var cachePath = Environment.GetEnvironmentVariable("NUGET_PACKAGES") ??
-                            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                                ".nuget/packages");
-            CleanNugetPackages(cachePath);
+            var cacheDirectory = GetCacheDirectory();
+            CleanNugetPackages(cacheDirectory);
 
             var sdkInteropDir =
                 Path.GetFullPath(Path.Combine(nugetSourceDir, "Improbable/WorkerSdkInterop/Improbable.WorkerSdkInterop"));
             var localNugetPackages = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "nupkgs"));
 
             // For simplicity, some packages depend on Improbable.WorkerSdkInterop. Make sure that's packaged first in the source directory.
+            var targetPath = Path.GetFullPath(Path.Combine(nugetSourceDir, "nupkgs"));
+            CleanDirectory(targetPath);
+
             shell.Run("dotnet", "pack", $"\"{sdkInteropDir}\"", "--verbosity:quiet", "-p:Platform=x64", "--output",
-                $"\"{Path.GetFullPath(Path.Combine(nugetSourceDir, "nupkgs"))}\"")
+                $"\"{targetPath}\"")
                 .RedirectTo(Console.Out)
                 .RedirectStandardErrorTo(Console.Error)
                 .Wait();
@@ -127,6 +137,41 @@ namespace BuildNugetPackages
                 .Wait();
 
             Console.Out.WriteLine("Built NuGet packages.");
+
+            shell.Run("dotnet", "restore", "--verbosity:quiet", "-p:Platform=x64")
+                .RedirectTo(Console.Out)
+                .RedirectStandardErrorTo(Console.Error)
+                .Wait();
+
+            Console.Out.WriteLine("Restoring NuGet packages...");
+
+            PrintSchemaLocations();
+        }
+
+        private static string GetCacheDirectory()
+        {
+            var outputLines = new List<string>();
+            // Make any required schema accessible to users
+            shell.Run("dotnet", "nuget", "locals", "global-packages", "--list")
+                .RedirectTo(outputLines)
+                .RedirectStandardErrorTo(Console.Error)
+                .Wait();
+
+            const string globalPackages = "global-packages:";
+            var locationString = outputLines
+                .FirstOrDefault(s => s.Contains(globalPackages));
+
+            if (locationString == null)
+            {
+                throw new Exception($"Could not find nuget package location in: {string.Join("\n", outputLines)}");
+            }
+
+            var location = locationString
+                .Substring(locationString.IndexOf(globalPackages, StringComparison.Ordinal) + globalPackages.Length)
+                .Trim()
+                .TrimEnd('\\', '/');
+
+            return location;
         }
 
         private static void CleanNugetPackages(string cachePath)
@@ -164,6 +209,11 @@ namespace BuildNugetPackages
         private static bool IsReadOnly(string f)
         {
             return (File.GetAttributes(f) & FileAttributes.ReadOnly) != 0;
+        }
+
+        [Verb("print-schema")]
+        private class PrintSchemaOptions
+        {
         }
 
         [Verb("local")]
