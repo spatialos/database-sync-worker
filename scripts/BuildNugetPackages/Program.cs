@@ -219,7 +219,7 @@ namespace BuildNugetPackages
         [Verb("local")]
         private class LocalOptions
         {
-            [Option("source-dir", Required = true)]
+            [Option("source-dir", Default = "../csharp-worker-template")]
             public string SourceDir { get; set; }
         }
 
