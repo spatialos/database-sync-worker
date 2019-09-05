@@ -17,6 +17,6 @@
     <PackageReference Include="Improbable.Postgres.CSharpCodeGen" Version="0.0.2-preview" />
     <PackageReference Include="Improbable.DatabaseSync.CSharpCodeGen" Version="0.0.1-preview" />
     <PackageReference Include="Improbable.WorkerSdkInterop.CSharpCodeGen" Version="0.0.1-preview" />
-    <PackageReference Include="Improbable.Schema.Bundle" Version="0.0.1-preview" />
+    <PackageReference Include="Improbable.Schema.Bundle" Version="0.0.2-preview" />
   </ItemGroup>
 </Project>
