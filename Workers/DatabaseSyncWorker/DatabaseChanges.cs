@@ -20,7 +20,7 @@ namespace DatabaseSyncWorker
         {
             tcs = new CancellationTokenSource();
 
-            thread = new Thread(async unusedStateObject =>
+            Task.Factory.StartNew(async unusedStateObject =>
             {
                 NpgsqlConnection connection = null;
 
@@ -67,7 +67,7 @@ namespace DatabaseSyncWorker
                         connection?.Dispose();
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(5), tcs.Token);
+                    await Task.Delay(TimeSpan.FromSeconds(5));
                 }
 
                 Log.Information("Stopped listening to {TableName}", tableName);
