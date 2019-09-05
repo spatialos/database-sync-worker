@@ -11,7 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommandLineParser" Version="2.4.3" />
+    <PackageReference Include="CommandLineParser" Version="2.5.0" />
     <PackageReference Include="Improbable.CSharpCodeGen" Version="0.0.1-preview" />
     <PackageReference Include="Improbable.Stdlib.CSharpCodeGen" Version="0.0.2-preview" />
     <PackageReference Include="Improbable.Postgres.CSharpCodeGen" Version="0.0.2-preview" />
