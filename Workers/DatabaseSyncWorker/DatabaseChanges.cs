@@ -53,7 +53,7 @@ namespace DatabaseSyncWorker
                             await connection.WaitAsync(tcs.Token);
                         }
                     }
-                    catch (OperationCanceledException)
+                    catch (TaskCanceledException)
                     {
                         // Don't log, avoid adding confusion to logs on a graceful shutdown.
                         break;
