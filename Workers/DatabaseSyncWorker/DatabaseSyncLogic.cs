@@ -737,7 +737,7 @@ namespace DatabaseSyncWorker
 
             if (!clientWorkers.TryGetValue(profileRoot, out var associatedWorkerId))
             {
-                Log.Error("No worker associated with '{Profile}'", profileRoot);
+                Log.Error("No client worker associated with '{Profile}'", profileRoot);
                 return false;
             }
 
