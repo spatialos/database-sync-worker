@@ -14,12 +14,13 @@ namespace DatabaseSyncWorker
     {
         private ImmutableArray<TType> changes = ImmutableArray<TType>.Empty;
         private CancellationTokenSource tcs;
+        private readonly Task task;
 
         public DatabaseChanges(PostgresOptions postgresOptions, string tableName)
         {
             tcs = new CancellationTokenSource();
 
-            Task.Factory.StartNew(async unusedStateObject =>
+            task = Task.Factory.StartNew(async unusedStateObject =>
             {
                 NpgsqlConnection connection = null;
 
@@ -52,6 +53,11 @@ namespace DatabaseSyncWorker
                             await connection.WaitAsync(tcs.Token);
                         }
                     }
+                    catch (TaskCanceledException)
+                    {
+                        // Don't log, avoid adding confusion to logs on a graceful shutdown.
+                        break;
+                    }
                     catch (Exception e)
                     {
                         Log.Error(e, "LISTEN {TableName}", tableName);
@@ -61,9 +67,11 @@ namespace DatabaseSyncWorker
                         connection?.Dispose();
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(5));
+                    await Task.Delay(TimeSpan.FromSeconds(5), tcs.Token);
                 }
-            }, TaskCreationOptions.LongRunning, tcs.Token);
+
+                Log.Information("Stopped listening to {TableName}", tableName);
+            }, TaskCreationOptions.LongRunning);
         }
 
         public ImmutableArray<TType> GetChanges()
@@ -76,8 +84,10 @@ namespace DatabaseSyncWorker
 
         public void Dispose()
         {
-            tcs.Cancel();
-            tcs.Dispose();
+            tcs?.Cancel();
+            task?.Wait();
+
+            tcs?.Dispose();
             tcs = null;
         }
     }
