@@ -48,14 +48,19 @@ namespace BuildNugetPackages
 
                     var remoteBranch = lines.Any() && lines.First().Contains(currentBranch) ? currentBranch : "master";
 
-                    Console.Out.WriteLine($@"steps:
+                    var pipeline = $@"steps:
   - label: ""{dep.Label}""
-    trigger: {dep.Trigger}
+    trigger: ""{dep.Trigger}""
     build:
-      branch: {remoteBranch}
+      branch: ""{remoteBranch}""
       env:
         DBSYNC_WORKER_BRANCH: ""{currentBranch}""
-        CSHARP_TEMPLATE_BRANCH: ""$CSHARP_TEMPLATE_BRANCH""");
+        CSHARP_TEMPLATE_BRANCH: ""$CSHARP_TEMPLATE_BRANCH""";
+
+                    Console.Out.WriteLine(pipeline);
+
+                    // Output to stderr to aid in debugging.
+                    Console.Error.WriteLine(pipeline);
                 }
             }
 
