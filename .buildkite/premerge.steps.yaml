@@ -34,6 +34,8 @@ windows: &windows
 # NOTE: step labels turn into commit-status names like {org}/{repo}/{pipeline}/{step-label}, lower-case and hyphenated.
 # These are then relied on to have stable names by other things, so once named, please beware renaming has consequences.
 
+dag: true
+
 steps:
   - label: "build-linux"
     command: "ci/bk/build-linux.sh"
@@ -42,9 +44,11 @@ steps:
     <<: *linux
 
   - label: "test-linux"
+    id: "test-linux"
     command: "ci/bk/test-linux.sh"
     artifact_paths:
       - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
+      - "logs/*.xml"
     <<: *linux
 
   - label: "build-windows"
@@ -58,4 +62,18 @@ steps:
 
   - label: "upload-pipeline"
     command: "mkdir -p nupkgs && dotnet run --project scripts/GetDependentBranchNames | buildkite-agent pipeline upload"
+    <<: *linux
+
+  - label: "annotate test results :pencil2:"
+    depends_on: 
+      - step: "test-linux"
+        allow_failure: true
+    plugins: 
+      - improbable/test-summary#8301ac00fe128026db8179a5e1dd4092df41be6f:
+          inputs:
+            - label: ":octagonal_sign: Test failures "
+              artifact_path: "logs/*.xml"
+              type: nunit
+          formatter:
+            type: details
     <<: *linux
