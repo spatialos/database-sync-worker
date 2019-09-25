@@ -251,9 +251,9 @@ Directly, from the command line: `dotnet run -p Workers/DatabaseSyncWorker`
 **macOS/Linux**
 `scripts/publish-linux-workers.sh`
 
-This will build a self-contained appplication, which can be found in `Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp2.2/linux-x64/publish`, ready for upload.
+This will build a self-contained appplication, which can be found in `Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp2.1/linux-x64/publish`, ready for upload.
 
-The executable entry point is `Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp2.2/linux-x64/publish/DatabaseSyncWorker`.
+The executable entry point is `Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp2.1/linux-x64/publish/DatabaseSyncWorker`.
 
 # Interacting with the database
 
