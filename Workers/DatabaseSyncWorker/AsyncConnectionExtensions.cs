@@ -5,7 +5,7 @@ namespace DatabaseSyncWorker
 {
     public static class AsyncConnectionExtensions
     {
-        public static void SendCommandFailure(this WorkerConnection connection, uint requestId, CommandErrors error)
+        public static void SendCommandFailure(this WorkerConnection connection, long requestId, CommandErrors error)
         {
             connection.SendCommandFailure(requestId, error.ToString("D"));
         }

@@ -696,7 +696,7 @@ namespace DatabaseSyncWorker
 
                 var update = new DatabaseSyncService.Update();
                 update.AddPathsUpdatedEvent(new PathsUpdated(changedPaths));
-                connection.SendComponentUpdate(serviceEntityId, update.ToSchemaUpdate(), NoLoopbackParameters);
+                DatabaseSyncService.SendUpdate(connection, serviceEntityId, update, NoLoopbackParameters);
             });
         }
 
@@ -766,11 +766,11 @@ namespace DatabaseSyncWorker
             try
             {
                 Log.Debug("Hydrating {Profile} {EntityId}...", profileId, entityId);
-                var children = await service.SendGetItemsAsync(new GetItemsRequest(profileId, GetItemDepth.Recursive, connection.WorkerId), cancellation, null, new CommandParameters { AllowShortCircuiting = true })
+                var children = await service.SendGetItemsAsync(new GetItemsRequest(profileId, GetItemDepth.Recursive, connection.WorkerId), cancellation, null, new CommandParameters { AllowShortCircuit = true })
                     .ConfigureAwait(false);
 
                 var update = HydrateComponents[componentId].Hydrate(children.Items, profileId);
-                connection.SendComponentUpdate(entityId, update, NoLoopbackParameters);
+                connection.SendComponentUpdate(entityId, componentId, update, NoLoopbackParameters);
             }
             catch (Exception e)
             {
