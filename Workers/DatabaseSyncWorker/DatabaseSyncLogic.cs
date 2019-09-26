@@ -123,7 +123,7 @@ namespace DatabaseSyncWorker
             {
                 if (workers.TryGet(entityId, out var worker) && writeWorkerTypes.Contains(worker.WorkerType))
                 {
-                    Log.Debug("Logged in admin {Id} => {Type}", worker.WorkerId, worker.WorkerType);
+                    Log.Debug("Logged in admin {Id} => {Type} {Self}", worker.WorkerId, worker.WorkerType, worker.WorkerId == connection.WorkerId ? "(self)": "");
                     adminWorkers.AddOrUpdate(worker.WorkerId, worker.WorkerType, (key, oldValue) => worker.WorkerType);
                 }
             }
@@ -755,7 +755,7 @@ namespace DatabaseSyncWorker
             var canWorkerTypeWrite = adminWorkers.ContainsKey(request.CallerWorkerId);
             if (!canWorkerTypeWrite)
             {
-                Log.Error("{Types} not in {Attributes}", writeWorkerTypes, request.CallerAttributeSet);
+                Log.Error("{Types} not in {AdminWorkers}", request.CallerWorkerId, adminWorkers);
             }
 
             return canWorkerTypeWrite;
