@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <Platforms>x64</Platforms>
     <Platform Condition="'$(Platform)' == ''">x64</Platform>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>7.3</LangVersion>
     <SelfContained>false</SelfContained>
   </PropertyGroup>
 
