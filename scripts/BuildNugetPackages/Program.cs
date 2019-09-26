@@ -123,15 +123,14 @@ namespace BuildNugetPackages
             var targetPath = Path.GetFullPath(Path.Combine(nugetSourceDir, "nupkgs"));
             CleanDirectory(targetPath);
 
-            shell.Run("dotnet", "pack", $"{sdkInteropDir}", "--verbosity:quiet", "-p:Platform=x64", "--output",
-                $"{targetPath}")
+            shell.Run("dotnet", "pack", sdkInteropDir, "--verbosity:quiet", "-p:Platform=x64", "--output", targetPath)
                 .RedirectTo(Console.Out)
                 .RedirectStandardErrorTo(Console.Error)
                 .Wait();
 
             // Now build everything into the worker's directory.
-            shell.Run("dotnet", "pack", $"{Path.Combine(nugetSourceDir, "Improbable")}", "--verbosity:quiet",
-                "-p:Platform=x64", "--output", $"{localNugetPackages}")
+            shell.Run("dotnet", "pack", Path.Combine(nugetSourceDir, "Improbable"), "--verbosity:quiet",
+                "-p:Platform=x64", "--output", localNugetPackages)
                 .RedirectTo(Console.Out)
                 .RedirectStandardErrorTo(Console.Error)
                 .Wait();
