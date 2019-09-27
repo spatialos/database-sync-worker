@@ -4,7 +4,7 @@ linux: &linux
     - "environment=production"
     - "permission_set=builder"
     - "platform=linux"  # if you need a different platform, configure this: macos|linux|windows.
-    - "queue=v3-1561728034-9178d5adb4ab9963-------z"
+    - "queue=v3-1569577866-bb32dd3980985997-------z"
     - "scaler_version=2"
   timeout_in_minutes: 10
   retry:
