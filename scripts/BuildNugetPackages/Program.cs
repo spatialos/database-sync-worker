@@ -197,6 +197,12 @@ namespace BuildNugetPackages
 
             if (Directory.Exists(nugetSourceDir))
             {
+                foreach(var file in Directory
+                    .EnumerateFileSystemEntries(nugetSourceDir, "*", SearchOption.AllDirectories))
+                {
+                    Console.Out.WriteLine($"  -> {file}");
+                }
+
                 var toUnProtect = Directory
                     .EnumerateFileSystemEntries(nugetSourceDir, "*", SearchOption.AllDirectories).Where(IsReadOnly);
 
