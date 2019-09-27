@@ -119,6 +119,8 @@ namespace BuildNugetPackages
                 Path.GetFullPath(Path.Combine(nugetSourceDir, "Improbable", "WorkerSdkInterop", "Improbable.WorkerSdkInterop"));
             var localNugetPackages = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "nupkgs"));
 
+            CleanDirectory(localNugetPackages);
+
             // For simplicity, some packages depend on Improbable.WorkerSdkInterop. Make sure that's packaged first in the source directory.
             var targetPath = Path.GetFullPath(Path.Combine(nugetSourceDir, "nupkgs"));
             CleanDirectory(targetPath);
@@ -203,6 +205,8 @@ namespace BuildNugetPackages
 
                 Directory.Delete(nugetSourceDir, true);
             }
+
+            Directory.CreateDirectory(nugetSourceDir);
         }
 
         private static bool IsReadOnly(string f)
