@@ -205,6 +205,7 @@ namespace BuildNugetPackages
                     File.SetAttributes(f, File.GetAttributes(f) & ~ FileAttributes.ReadOnly);
                 }
 
+                Console.Out.Write($" deleting...");
                 Directory.Delete(nugetSourceDir, true);
             }
 
