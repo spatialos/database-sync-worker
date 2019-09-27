@@ -24,11 +24,13 @@ namespace DatabaseSyncWorker
             {
                 NpgsqlConnection connection = null;
 
-                while (tcs != null && !tcs.Token.IsCancellationRequested)
+                while (tcs != null)
                 {
                     var connectionString = postgresOptions.ConnectionString;
                     try
                     {
+                        tcs.Token.ThrowIfCancellationRequested();
+
                         connection = new NpgsqlConnection(connectionString);
                         connection.Open();
 
@@ -36,10 +38,17 @@ namespace DatabaseSyncWorker
 
                         connection.Notification += (sender, args) =>
                         {
-                            var changeNotification = JsonConvert.DeserializeObject<TType>(args.AdditionalInformation);
-                            changes = changes.Add(changeNotification);
+                            try
+                            {
+                                var changeNotification = JsonConvert.DeserializeObject<TType>(args.AdditionalInformation);
+                                changes = changes.Add(changeNotification);
 
-                            Metrics.Inc(Metrics.TotalChangesReceived);
+                                Metrics.Inc(Metrics.TotalChangesReceived);
+                            }
+                            catch (Exception e)
+                            {
+                                Log.Error(e, "While parsing JSON for change notification");
+                            }
                         };
 
                         // Receive notifications from the database when rows change.
@@ -60,7 +69,10 @@ namespace DatabaseSyncWorker
                     }
                     catch (Exception e)
                     {
-                        Log.Error(e, "LISTEN {TableName}", tableName);
+                        if (!tcs.Token.IsCancellationRequested)
+                        {
+                            Log.Error(e, "LISTEN {TableName}", tableName);
+                        }
                     }
                     finally
                     {

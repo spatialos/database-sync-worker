@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <Platforms>x64</Platforms>
     <Platform Condition="'$(Platform)' == ''">x64</Platform>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>7.3</LangVersion>
     <SelfContained>false</SelfContained>
   </PropertyGroup>
 
@@ -24,10 +24,10 @@
     <PackageReference Include="Improbable.DatabaseSync" Version="0.0.1-preview" />
     <PackageReference Include="Improbable.Postgres.Schema" Version="0.0.1-preview" />
     <PackageReference Include="Improbable.DatabaseSync.Schema" Version="0.0.2-preview" />
-    <PackageReference Include="Improbable.Stdlib.Schema" Version="13.8.2" />
-    <PackageReference Include="Improbable.Test.Schema" Version="13.8.2" />
-    <PackageReference Include="Improbable.WorkerSdkInterop" Version="13.8.2" />
-    <PackageReference Include="Improbable.Schema.Compiler" Version="13.8.2" />
+    <PackageReference Include="Improbable.Stdlib.Schema" Version="14.1.0" />
+    <PackageReference Include="Improbable.Test.Schema" Version="14.1.0" />
+    <PackageReference Include="Improbable.WorkerSdkInterop" Version="14.1.0" />
+    <PackageReference Include="Improbable.Schema.Compiler" Version="14.1.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="Npgsql" Version="4.0.7" />
     <PackageReference Include="System.Collections.Immutable" Version="1.5.0" />

@@ -3,7 +3,7 @@ FROM microsoft/dotnet:2.2-sdk as build
 RUN curl -LSs -o /usr/local/bin/gosu -SL "https://github.com/tianon/gosu/releases/download/1.4/gosu-$(dpkg --print-architecture)" \
     && chmod +x /usr/local/bin/gosu
 
-ARG TOOLBELT_VERSION="20190827.085359.7e083741fd"
+ARG TOOLBELT_VERSION="20190924.093427.d1d4ab159e"
 WORKDIR /build
 
 # Mount a directory which contains the oauth2 token

@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.2</TargetFramework>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
     <ApplicationIcon />
     <OutputType>Exe</OutputType>
     <StartupObject />
-    <LangVersion>latest</LangVersion>
+    <LangVersion>7.3</LangVersion>
     <SelfContained>false</SelfContained>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
