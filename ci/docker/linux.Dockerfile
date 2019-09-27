@@ -14,5 +14,7 @@ ADD "https://console.improbable.io/toolbelt/download/${TOOLBELT_VERSION}/linux" 
 RUN ["chmod", "+x", "./spatial"]
 ENV PATH "$PATH:/build/tools/"
 
+WORKDIR /build
+
 COPY ci/docker/entrypoint.sh ./entrypoint.sh
 ENTRYPOINT ["./entrypoint.sh"]
