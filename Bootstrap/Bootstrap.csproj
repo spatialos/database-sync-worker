@@ -6,7 +6,7 @@
     <LangVersion>8.0</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CommandLineParser" Version="2.5.0" />
+    <PackageReference Include="CommandLineParser" Version="2.6.0" />
     <PackageReference Include="Improbable.Postgres" Version="0.0.2-preview" />
     <PackageReference Include="Improbable.DatabaseSync" Version="0.0.1-preview" />
     <PackageReference Include="Serilog" Version="2.8.0" />
