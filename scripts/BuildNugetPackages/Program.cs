@@ -117,8 +117,6 @@ namespace BuildNugetPackages
                 Path.GetFullPath(Path.Combine(nugetSourceDir, "Improbable", "WorkerSdkInterop", "Improbable.WorkerSdkInterop"));
             var localNugetPackages = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "nupkgs"));
 
-            CleanDirectory(localNugetPackages);
-
             // For simplicity, some packages depend on Improbable.WorkerSdkInterop. Make sure that's packaged first in the source directory.
             var targetPath = Path.GetFullPath(Path.Combine(nugetSourceDir, "nupkgs"));
             CleanDirectory(targetPath);
@@ -197,12 +195,6 @@ namespace BuildNugetPackages
 
             if (Directory.Exists(nugetSourceDir))
             {
-                foreach(var file in Directory
-                    .EnumerateFileSystemEntries(nugetSourceDir, "*", SearchOption.AllDirectories))
-                {
-                    Console.Out.WriteLine($"  -> {file}");
-                }
-
                 var toUnProtect = Directory
                     .EnumerateFileSystemEntries(nugetSourceDir, "*", SearchOption.AllDirectories).Where(IsReadOnly);
 
