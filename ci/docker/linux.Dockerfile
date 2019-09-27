@@ -1,4 +1,4 @@
-FROM microsoft/dotnet:3.0-sdk as build
+FROM mcr.microsoft.com/dotnet/core/sdk:3.0 as build
 
 RUN curl -LSs -o /usr/local/bin/gosu -SL "https://github.com/tianon/gosu/releases/download/1.4/gosu-$(dpkg --print-architecture)" \
     && chmod +x /usr/local/bin/gosu
