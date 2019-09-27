@@ -242,7 +242,7 @@ namespace DatabaseSyncWorker
                         cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
                         cmd.Command.Prepare();
 
-                        var affected = cmd.Command.ExecuteNonQuery();
+                        ulong affected = (ulong) cmd.Command.ExecuteNonQuery();
                         Log.Debug("Removed {Count} rows", affected);
 
                         service.SendDeleteResponse(commandRequestOp.RequestId, new DeleteResponse(affected));

@@ -40,7 +40,7 @@ namespace DatabaseSyncWorker
                         {
                             try
                             {
-                                var changeNotification = JsonConvert.DeserializeObject<TType>(args.AdditionalInformation);
+                                var changeNotification = JsonConvert.DeserializeObject<TType>(args.Payload);
                                 changes = changes.Add(changeNotification);
 
                                 Metrics.Inc(Metrics.TotalChangesReceived);
