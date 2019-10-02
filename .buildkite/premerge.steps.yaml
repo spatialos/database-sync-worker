@@ -19,7 +19,7 @@ windows: &windows
     - "environment=production"
     - "permission_set=builder"
     - "platform=windows"  # if you need a different platform, configure this: macos|linux|windows.
-    - "queue={CI_WINDOWS_BUILDER_QUEUE:-v3-1570013145-dde8389e67fde80e-------z}"
+    - "queue=${CI_WINDOWS_BUILDER_QUEUE:-v3-1570013145-dde8389e67fde80e-------z}"
     - "scaler_version=2"
   timeout_in_minutes: 10
   retry:
