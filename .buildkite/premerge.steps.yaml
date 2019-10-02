@@ -4,7 +4,7 @@ linux: &linux
     - "environment=production"
     - "permission_set=builder"
     - "platform=linux"  # if you need a different platform, configure this: macos|linux|windows.
-    - "queue=v3-1569577866-bb32dd3980985997-------z"
+    - "queue=v3-1570005162-2a2d4a23b63d4b72-------z"
     - "scaler_version=2"
   timeout_in_minutes: 10
   retry:
@@ -19,7 +19,7 @@ windows: &windows
     - "environment=production"
     - "permission_set=builder"
     - "platform=windows"  # if you need a different platform, configure this: macos|linux|windows.
-    - "queue=v3-1569510447-bb32dd3980985997-------z"
+    - "queue=v3-1570013145-dde8389e67fde80e-------z"
     - "scaler_version=2"
   timeout_in_minutes: 10
   retry:
@@ -35,17 +35,20 @@ dag: true
 
 steps:
   - label: "build-linux"
-    command: "ci/bk/build-linux.sh"
+    command: "ci/bk/linux.sh ./ci/docker/docker-compose-build.yml"
+    plugins:
+      - ./.buildkite/plugins/setup-environment:
     artifact_paths:
       - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
     <<: *linux
 
   - label: "test-linux"
     id: "test-linux"
-    command: "ci/bk/test-linux.sh"
+    command: "ci/bk/linux.sh ./ci/docker/docker-compose-test.yml"
     artifact_paths:
       - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
-      - "logs/*.xml"
+    plugins:
+      - ./.buildkite/plugins/setup-environment:
     <<: *linux
 
   - label: "build-windows"
@@ -69,7 +72,7 @@ steps:
       - improbable/test-summary#8301ac00fe128026db8179a5e1dd4092df41be6f:
           inputs:
             - label: ":octagonal_sign: Test failures "
-              artifact_path: "logs/*.xml"
+              artifact_path: "tmp/${BUILDKITE_BUILD_ID}/*-tests/*"
               type: nunit
           formatter:
             type: details

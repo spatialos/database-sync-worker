@@ -13,4 +13,4 @@ chown -R user:user "${HOME}"
 chown -R user:user "./"
 chown -R user:user "/var/spatial_oauth"
 
-tail -f /dev/null
+gosu user "$@"

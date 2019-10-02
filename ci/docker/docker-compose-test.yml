@@ -1,0 +1,15 @@
+version: "3"
+services:
+  dotnet:
+    build:
+      dockerfile: ci/docker/linux.Dockerfile
+      context: ../../
+    command: ["ci/docker/entrypoint.sh", "ci/test.sh"]
+    volumes:
+        - ${IMPROBABLE_CONFIG_DIR}:/home/user/.improbable
+        - ${TEST_RESULTS_DIR}:/build/worker/test-results
+    environment:
+        - TEST_RESULTS_DIR=/build/worker/test-results
+        - CSHARP_TEMPLATE_BRANCH=${CSHARP_TEMPLATE_BRANCH}
+        - BUILDKITE_BRANCH=${BUILDKITE_BRANCH}
+

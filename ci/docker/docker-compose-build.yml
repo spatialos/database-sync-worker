@@ -4,10 +4,9 @@ services:
     build:
       dockerfile: ci/docker/linux.Dockerfile
       context: ../../
+    command: ["ci/docker/entrypoint.sh", "ci/build.sh"]
     volumes:
-        - ${SPATIAL_OAUTH_DIR}:/var/spatial_oauth
-        - ${PACKAGES_DIR}:/build/worker/nupkgs
+        - ${IMPROBABLE_CONFIG_DIR}:/home/user/.improbable
     environment:
         - CSHARP_TEMPLATE_BRANCH=${CSHARP_TEMPLATE_BRANCH}
-        - IMPROBABLE_CONFIG_DIR=/var/spatial_oauth/
         - BUILDKITE_BRANCH=${BUILDKITE_BRANCH}
