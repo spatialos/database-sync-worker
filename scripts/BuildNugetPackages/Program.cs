@@ -110,8 +110,6 @@ namespace BuildNugetPackages
 
         private static void BuildPackages(string nugetSourceDir)
         {
-            Console.Out.WriteLine("Building NuGet packages...");
-
             var cacheDirectory = GetCacheDirectory();
             CleanNugetPackages(cacheDirectory);
 
@@ -180,17 +178,21 @@ namespace BuildNugetPackages
                 var toClear = Directory.EnumerateDirectories(cachePath, "improbable.*",
                     new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, RecurseSubdirectories = false });
 
-                Console.Out.WriteLine("Clearing NuGet cache of Improbable packages...");
+                Console.Out.WriteLine($"Clearing '{cachePath}' of Improbable packages...");
 
                 foreach (var dir in toClear)
                 {
+                    Console.Out.Write($"  {dir}...");
                     Directory.Delete(dir, true);
+                    Console.Out.WriteLine($" (done)");
                 }
             }
         }
 
         private static void CleanDirectory(string nugetSourceDir)
         {
+            Console.Out.Write($"Cleaning '{nugetSourceDir}'...");
+
             if (Directory.Exists(nugetSourceDir))
             {
                 var toUnProtect = Directory
@@ -201,8 +203,12 @@ namespace BuildNugetPackages
                     File.SetAttributes(f, File.GetAttributes(f) & ~ FileAttributes.ReadOnly);
                 }
 
+                Console.Out.Write($" deleting...");
                 Directory.Delete(nugetSourceDir, true);
             }
+
+            Directory.CreateDirectory(nugetSourceDir);
+            Console.Out.WriteLine($" (done)");
         }
 
         private static bool IsReadOnly(string f)

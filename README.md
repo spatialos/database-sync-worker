@@ -1,5 +1,5 @@
 # Database Sync Worker (preview)
-[![Build status](https://badge.buildkite.com/eb40ef8885282f2482f0f0b4e0f2a93e1a6cf89e6541022108.svg)](https://buildkite.com/improbable/database-sync-worker-premerge) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Build status](https://badge.buildkite.com/eb40ef8885282f2482f0f0b4e0f2a93e1a6cf89e6541022108.svg?branch=master)](https://buildkite.com/improbable/database-sync-worker-premerge) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 The Database Sync Worker is a SpatialOS server-worker designed to easily sync and persist cross-session game data (such as player inventories) between SpatialOS and an external database.
 
@@ -251,9 +251,9 @@ Directly, from the command line: `dotnet run -p Workers/DatabaseSyncWorker`
 **macOS/Linux**
 `scripts/publish-linux-workers.sh`
 
-This will build a self-contained appplication, which can be found in `Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp2.1/linux-x64/publish`, ready for upload.
+This will build a self-contained appplication, which can be found in `Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp3.0/linux-x64/publish`, ready for upload.
 
-The executable entry point is `Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp2.1/linux-x64/publish/DatabaseSyncWorker`.
+The executable entry point is `Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp3.0/linux-x64/publish/DatabaseSyncWorker`.
 
 # Interacting with the database
 

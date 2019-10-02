@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <Platforms>x64</Platforms>
     <Platform Condition="'$(Platform)' == ''">x64</Platform>
-    <LangVersion>7.3</LangVersion>
+    <LangVersion>8.0</LangVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -21,6 +21,6 @@
     <PackageReference Include="Improbable.DatabaseSync" Version="0.0.1-preview" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="Npgsql" Version="4.0.5" />
-    <PackageReference Include="System.Collections.Immutable" Version="1.5.0" />
+    <PackageReference Include="System.Collections.Immutable" Version="1.6.0" />
   </ItemGroup>
 </Project>

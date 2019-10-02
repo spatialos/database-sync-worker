@@ -4,9 +4,9 @@ linux: &linux
     - "environment=production"
     - "permission_set=builder"
     - "platform=linux"  # if you need a different platform, configure this: macos|linux|windows.
-    - "queue=v3-1561728034-9178d5adb4ab9963-------z"
+    - "queue=${CI_LINUX_BUILDER_QUEUE:-v3-1570005162-2a2d4a23b63d4b72-------z}"
     - "scaler_version=2"
-  timeout_in_minutes: 60 # TODO(ENG-548): reduce timeout once agent-cold-start is optimised.
+  timeout_in_minutes: 10
   retry:
     automatic:
         # This is designed to trap and retry failures because agent lost connection. Agent exits with -1 in this case.
@@ -19,16 +19,13 @@ windows: &windows
     - "environment=production"
     - "permission_set=builder"
     - "platform=windows"  # if you need a different platform, configure this: macos|linux|windows.
-    - "queue=v3-1559053399-f2c8651809a877b4-------z"
+    - "queue=${CI_WINDOWS_BUILDER_QUEUE:-v3-1570013145-dde8389e67fde80e-------z}"
     - "scaler_version=2"
-  timeout_in_minutes: 60 # TODO(ENG-548): reduce timeout once agent-cold-start is optimised.
+  timeout_in_minutes: 10
   retry:
     automatic:
         # This is designed to trap and retry failures because agent lost connection. Agent exits with -1 in this case.
       - exit_status: -1
-        limit: 3
-        # Workaround for flaky Git clones, likely due to - https://github.com/PowerShell/Win32-OpenSSH/issues/1322
-      - exit_status: 128
         limit: 3
 
 # NOTE: step labels turn into commit-status names like {org}/{repo}/{pipeline}/{step-label}, lower-case and hyphenated.
@@ -38,17 +35,21 @@ dag: true
 
 steps:
   - label: "build-linux"
-    command: "ci/bk/build-linux.sh"
+    command: "ci/bk/linux.sh ./ci/docker/docker-compose-build.yml"
+    plugins:
+      - ./.buildkite/plugins/setup-environment:
     artifact_paths:
       - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
     <<: *linux
 
   - label: "test-linux"
     id: "test-linux"
-    command: "ci/bk/test-linux.sh"
+    command: "ci/bk/linux.sh ./ci/docker/docker-compose-test.yml"
     artifact_paths:
       - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
-      - "logs/*.xml"
+    plugins:
+      - ./.buildkite/plugins/setup-environment:
+    skip: "There are currently no tests."
     <<: *linux
 
   - label: "build-windows"
@@ -65,14 +66,14 @@ steps:
     <<: *linux
 
   - label: "annotate test results :pencil2:"
-    depends_on: 
+    depends_on:
       - step: "test-linux"
         allow_failure: true
-    plugins: 
+    plugins:
       - improbable/test-summary#8301ac00fe128026db8179a5e1dd4092df41be6f:
           inputs:
             - label: ":octagonal_sign: Test failures "
-              artifact_path: "logs/*.xml"
+              artifact_path: "tmp/${BUILDKITE_BUILD_ID}/*-tests/*"
               type: nunit
           formatter:
             type: details

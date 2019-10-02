@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export LOCAL_USER_ID=`id -u`
+
+# Create unique name given the hash and timestamp of the build for docker container/network.
+# This means that builds that run in parallel on the same machine cannot clash _unless_ they run with the same hash at the same time (sufficiently unlikely!).
+GIT_HASH="$(git rev-parse HEAD | cut -c1-8)"
+TIMESTAMP=$(date +"%y%m%d%H%M%S%N")
+export DOCKER_COMPOSE_NAME="compose_${GIT_HASH}_${TIMESTAMP}"
+
+# Create volume mount points for build artifacts. These are consumed in the docker compose files.
+export UNIQUE_BUILD_PATH="${BUILDKITE_BUILD_ID}/${BUILDKITE_JOB_ID}"
+export LOGS_DIR="/tmp/${UNIQUE_BUILD_PATH}-logs"
+export TEST_RESULTS_DIR="/tmp/${UNIQUE_BUILD_PATH}-tests"
+
+mkdir -p "${LOGS_DIR}"
+mkdir -p "${TEST_RESULTS_DIR}"
+
+# Create volume mount point for the build secret, and put it into the default location.
+# This is mounted as a volume in the docker compose files.
+
+# IMPROBABLE_CONFIG_DIR is used by `spatial` to control the location that it writes to.
+export IMPROBABLE_CONFIG_DIR=$(mktemp -d)
+
+imp-ci secrets read \
+    --environment="production" \
+    --secret-type="spatialos-service-account" \
+    --buildkite-org="improbable" \
+    --secret-name="online-services-toolbelt" \
+    --field="token" \
+    --write-to="${IMPROBABLE_CONFIG_DIR}/oauth2/oauth2_refresh_token"

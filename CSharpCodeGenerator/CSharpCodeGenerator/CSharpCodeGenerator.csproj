@@ -1,17 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.1</TargetFramework>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
     <ApplicationIcon />
     <OutputType>Exe</OutputType>
     <StartupObject />
-    <LangVersion>7.3</LangVersion>
+    <LangVersion>8.0</LangVersion>
     <SelfContained>false</SelfContained>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommandLineParser" Version="2.5.0" />
+    <PackageReference Include="CommandLineParser" Version="2.6.0" />
     <PackageReference Include="Improbable.CSharpCodeGen" Version="0.0.1-preview" />
     <PackageReference Include="Improbable.Stdlib.CSharpCodeGen" Version="0.0.2-preview" />
     <PackageReference Include="Improbable.Postgres.CSharpCodeGen" Version="0.0.2-preview" />
