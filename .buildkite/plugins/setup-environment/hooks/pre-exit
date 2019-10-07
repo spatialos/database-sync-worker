@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! [[ -z "${DOCKER_COMPOSE_NAME:-}" ]]; then
+    pushd ci/docker
+        docker-compose --project-name "${DOCKER_COMPOSE_NAME}" down
+    popd
+fi
