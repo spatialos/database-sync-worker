@@ -41,7 +41,6 @@ steps:
       - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
     plugins:
       - ./.buildkite/plugins/setup-environment:
-    skip: "There are currently no tests."
     <<: *linux
 
   - label: "build-windows"
