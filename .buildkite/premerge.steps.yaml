@@ -34,22 +34,13 @@ windows: &windows
 dag: true
 
 steps:
-  - label: "build-linux"
-    command: "ci/bk/linux.sh ./ci/docker/docker-compose-build.yml"
-    plugins:
-      - ./.buildkite/plugins/setup-environment:
-    artifact_paths:
-      - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
-    <<: *linux
-
   - label: "test-linux"
     id: "test-linux"
-    command: "ci/bk/linux.sh ./ci/docker/docker-compose-test.yml"
+    command: "ci/bk/linux.sh"
     artifact_paths:
       - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
     plugins:
       - ./.buildkite/plugins/setup-environment:
-    skip: "There are currently no tests."
     <<: *linux
 
   - label: "build-windows"

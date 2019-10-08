@@ -3,6 +3,9 @@ set -euo pipefail
 
 export LOCAL_USER_ID=`id -u`
 
+# Silence "Welcome" message to avoid interfering with any steps that invoke dotnet and redirect its output.
+dotnet new > /dev/null
+
 # Create unique name given the hash and timestamp of the build for docker container/network.
 # This means that builds that run in parallel on the same machine cannot clash _unless_ they run with the same hash at the same time (sufficiently unlikely!).
 GIT_HASH="$(git rev-parse HEAD | cut -c1-8)"
