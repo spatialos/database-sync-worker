@@ -18,5 +18,6 @@ namespace DatabaseSyncWorker
         public string PostgresDatabase { get; set; }
         public string PostgresAdditionalOptions { get; set; }
         public bool PostgresFromWorkerFlags { get; set; }
+        public string WorkerType { get; set; }
     }
 }

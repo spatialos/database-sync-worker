@@ -11,6 +11,7 @@ using Improbable.Stdlib;
 using Improbable.Postgres;
 using Improbable.Restricted;
 using Improbable.Worker.CInterop;
+using Improbable.Worker.CInterop.Query;
 using Npgsql;
 using NpgsqlTypes;
 using Serilog;
@@ -32,24 +33,22 @@ namespace DatabaseSyncWorker
         private readonly ConcurrentDictionary<string, string> clientWorkers = new ConcurrentDictionary<string, string>();
         private readonly ConcurrentDictionary<string, string> adminWorkers = new ConcurrentDictionary<string, string>();
         private readonly WorkerConnection connection;
-        private readonly EntityId serviceEntityId;
+        private EntityId serviceEntityId;
         private readonly Dictionary<uint, WhenAllComponents> hydrateAllComponents = new Dictionary<uint, WhenAllComponents>();
         private readonly ConcurrentDictionary<string, DateTime> pendingUpdates = new ConcurrentDictionary<string, DateTime>();
         private readonly ConcurrentDictionary<string, EntityId> profileToEntityId = new ConcurrentDictionary<string, EntityId>();
-        private readonly DatabaseSyncService.CommandSenderBinding service;
-        private readonly HashSet<string> writeWorkerTypes;
+        private DatabaseSyncService.CommandSenderBinding service;
+        private readonly HashSet<string> writeWorkerTypes = new HashSet<string>();
         private readonly PostgresOptions postgresOptions;
         private readonly string tableName;
         private long concurrentBatchRequests;
         private readonly MetricsPusher metricsPusher;
+        private readonly Task<WorkerConnection.EntityQueryResult> databaseServiceTask;
 
-        public DatabaseSyncLogic(PostgresOptions postgresOptions, string tableName, WorkerConnection connection, EntityId serviceEntityId, in DatabaseSyncService serviceEntity)
+        public DatabaseSyncLogic(PostgresOptions postgresOptions, string tableName, WorkerConnection connection)
         {
             this.postgresOptions = postgresOptions;
             this.connection = connection;
-            this.serviceEntityId = serviceEntityId;
-
-            service = new DatabaseSyncService.CommandSenderBinding(connection, serviceEntityId);
 
             this.tableName = tableName;
 
@@ -58,19 +57,14 @@ namespace DatabaseSyncWorker
                 hydrateAllComponents.Add(kv.Key, new WhenAllComponents(kv.Key));
             }
 
-            if (!serviceEntity.WriteWorkerTypes.Any())
-            {
-                throw new Exception($"{nameof(DatabaseSyncService)} has no write worker types defined.");
-            }
-
-            writeWorkerTypes = new HashSet<string>(serviceEntity.WriteWorkerTypes);
+            databaseServiceTask = Task.Run(() => connection.SendEntityQueryRequest(new EntityQuery {Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType()}));
             adminWorkers.TryAdd(connection.WorkerId, connection.WorkerId);
 
             metricsPusher = new MetricsPusher(this.postgresOptions);
             metricsPusher.StartPushingMetrics(TimeSpan.FromSeconds(10));
         }
 
-        public static IReadOnlyDictionary<uint, Reflection.HydrationType> HydrateComponents => restoreComponents ?? (restoreComponents = Reflection.FindHydrateMethods());
+        public static IReadOnlyDictionary<uint, Reflection.HydrationType> HydrateComponents => restoreComponents ??= Reflection.FindHydrateMethods();
 
         public void ProcessOpList(OpList opList)
         {
@@ -110,23 +104,9 @@ namespace DatabaseSyncWorker
             clients.ProcessOpList(opList);
             workers.ProcessOpList(opList);
 
-            foreach (var entityId in whenWorkerClient.Activated)
-            {
-                if (clients.TryGet(entityId, out var client) && workers.TryGet(entityId, out var worker))
-                {
-                    Log.Debug("Logged in {Id} => {Path}", worker.WorkerId, client.PlayerIdentity.PlayerIdentifier);
-                    clientWorkers.AddOrUpdate(client.PlayerIdentity.PlayerIdentifier, worker.WorkerId, (key, oldValue) => worker.WorkerId);
-                }
-            }
+            ActivateWorkerClients(whenWorkerClient.Activated);
 
-            foreach (var entityId in whenWorker.Activated)
-            {
-                if (workers.TryGet(entityId, out var worker) && writeWorkerTypes.Contains(worker.WorkerType))
-                {
-                    Log.Debug("Logged in admin {Id} => {Type} {Self}", worker.WorkerId, worker.WorkerType, worker.WorkerId == connection.WorkerId ? "(self)": "");
-                    adminWorkers.AddOrUpdate(worker.WorkerId, worker.WorkerType, (key, oldValue) => worker.WorkerType);
-                }
-            }
+            ActivateWorkers(whenWorker.Activated);
 
             foreach (var whenAll in hydrateAllComponents)
             {
@@ -162,51 +142,104 @@ namespace DatabaseSyncWorker
                 }
             }
 
-            foreach (var commandRequestOp in opList
-                .OfOpType<CommandRequestOp>()
-                .OfComponent(DatabaseSyncService.ComponentId))
+            if (serviceEntityId.IsValid)
             {
-                var commandType = DatabaseSyncService.GetCommandType(commandRequestOp);
-
-                Improbable.Postgres.Metrics.Inc($"CommandIndex.{commandType}");
-
-                switch (commandType)
+                foreach (var commandRequestOp in opList
+                    .OfOpType<CommandRequestOp>()
+                    .OfComponent(DatabaseSyncService.ComponentId))
                 {
-                    case DatabaseSyncService.Commands.GetItem:
-                        HandleGetItemRequest(commandRequestOp);
-                        break;
+                    var commandType = DatabaseSyncService.GetCommandType(commandRequestOp);
 
-                    case DatabaseSyncService.Commands.GetItems:
-                        HandleGetItemsRequest(commandRequestOp);
-                        break;
+                    Improbable.Postgres.Metrics.Inc($"CommandIndex.{commandType}");
 
-                    case DatabaseSyncService.Commands.Increment:
-                        HandleIncrementRequest(commandRequestOp);
-                        break;
+                    switch (commandType)
+                    {
+                        case DatabaseSyncService.Commands.GetItem:
+                            HandleGetItemRequest(commandRequestOp);
+                            break;
 
-                    case DatabaseSyncService.Commands.Decrement:
-                        HandleDecrementRequest(commandRequestOp);
-                        break;
+                        case DatabaseSyncService.Commands.GetItems:
+                            HandleGetItemsRequest(commandRequestOp);
+                            break;
 
-                    case DatabaseSyncService.Commands.SetParent:
-                        HandleSetParentRequest(commandRequestOp);
-                        break;
+                        case DatabaseSyncService.Commands.Increment:
+                            HandleIncrementRequest(commandRequestOp);
+                            break;
 
-                    case DatabaseSyncService.Commands.Create:
-                        HandleCreateRequest(commandRequestOp);
-                        break;
+                        case DatabaseSyncService.Commands.Decrement:
+                            HandleDecrementRequest(commandRequestOp);
+                            break;
 
-                    case DatabaseSyncService.Commands.Delete:
-                        HandleDeleteRequest(commandRequestOp);
-                        break;
+                        case DatabaseSyncService.Commands.SetParent:
+                            HandleSetParentRequest(commandRequestOp);
+                            break;
 
-                    case DatabaseSyncService.Commands.Batch:
-                        HandleBatch(commandRequestOp);
-                        break;
+                        case DatabaseSyncService.Commands.Create:
+                            HandleCreateRequest(commandRequestOp);
+                            break;
 
-                    default:
-                        Log.Error("Unhandled commandType {CommandType}", commandType);
-                        break;
+                        case DatabaseSyncService.Commands.Delete:
+                            HandleDeleteRequest(commandRequestOp);
+                            break;
+
+                        case DatabaseSyncService.Commands.Batch:
+                            HandleBatch(commandRequestOp);
+                            break;
+
+                        default:
+                            Log.Error("Unhandled commandType {CommandType}", commandType);
+                            break;
+                    }
+                }
+            }
+            else if (databaseServiceTask.IsCompleted && !serviceEntityId.IsValid)
+            {
+                using var response = databaseServiceTask.Result;
+                if (response.ResultCount == 0)
+                {
+                    throw new ServiceNotFoundException(nameof(DatabaseSyncService));
+                }
+
+                serviceEntityId = response.Results.First().Key;
+                var serviceEntity = DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value);
+
+                if (!serviceEntity.WriteWorkerTypes.Any())
+                {
+                    throw new Exception($"{nameof(DatabaseSyncService)} has no write worker types defined.");
+                }
+
+                service = new DatabaseSyncService.CommandSenderBinding(connection, serviceEntityId);
+
+                foreach (var type in serviceEntity.WriteWorkerTypes)
+                {
+                    writeWorkerTypes.Add(type);
+                }
+
+                ActivateWorkerClients(clients.EntityIds);
+                ActivateWorkers(workers.EntityIds);
+            }
+        }
+
+        private void ActivateWorkers(IReadOnlyCollection<EntityId> activated)
+        {
+            foreach (var entityId in activated)
+            {
+                if (workers.TryGet(entityId, out var worker) && writeWorkerTypes.Contains(worker.WorkerType))
+                {
+                    Log.Debug("Logged in admin {Id} => {Type} {Self}", worker.WorkerId, worker.WorkerType, worker.WorkerId == connection.WorkerId ? "(self)" : "");
+                    adminWorkers.AddOrUpdate(worker.WorkerId, worker.WorkerType, (key, oldValue) => worker.WorkerType);
+                }
+            }
+        }
+
+        private void ActivateWorkerClients(IReadOnlyCollection<EntityId> activated)
+        {
+            foreach (var entityId in activated)
+            {
+                if (clients.TryGet(entityId, out var client) && workers.TryGet(entityId, out var worker))
+                {
+                    Log.Debug("Logged in {Id} => {Path}", worker.WorkerId, client.PlayerIdentity.PlayerIdentifier);
+                    clientWorkers.AddOrUpdate(client.PlayerIdentity.PlayerIdentifier, worker.WorkerId, (key, oldValue) => worker.WorkerId);
                 }
             }
         }
@@ -232,26 +265,24 @@ namespace DatabaseSyncWorker
 
             Task.Run(() =>
             {
-                using (var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using (var cmd = wrapper.Command())
+                using var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString);
+                using var cmd = wrapper.Command();
+                try
                 {
-                    try
-                    {
-                        AddDeleteStatement(cmd.Command, deleteRequest);
+                    AddDeleteStatement(cmd.Command, deleteRequest);
 
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
-                        cmd.Command.Prepare();
+                    cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
+                    cmd.Command.Prepare();
 
-                        ulong affected = (ulong) cmd.Command.ExecuteNonQuery();
-                        Log.Debug("Removed {Count} rows", affected);
+                    ulong affected = (ulong) cmd.Command.ExecuteNonQuery();
+                    Log.Debug("Removed {Count} rows", affected);
 
-                        service.SendDeleteResponse(commandRequestOp.RequestId, new DeleteResponse(affected));
-                    }
-                    catch (Exception e)
-                    {
-                        Log.Error(e, "{@Request}: {Sql}", deleteRequest, cmd.Command.CommandText);
-                        connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-                    }
+                    service.SendDeleteResponse(commandRequestOp.RequestId, new DeleteResponse(affected));
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "{@Request}: {Sql}", deleteRequest, cmd.Command.CommandText);
+                    connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
                 }
             });
         }

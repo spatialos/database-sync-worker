@@ -7,8 +7,9 @@ using CommandLine;
 using Improbable.DatabaseSync;
 using Improbable.Stdlib;
 using Improbable.Postgres;
+using Improbable.Stdlib.Platform;
 using Improbable.Worker.CInterop;
-using Improbable.Worker.CInterop.Query;
+using Improbable.Worker.CInterop.Alpha;
 using Npgsql.Logging;
 using Serilog;
 using OpList = Improbable.Stdlib.OpList;
@@ -17,8 +18,6 @@ namespace DatabaseSyncWorker
 {
     internal class Program
     {
-        private const string WorkerType = "DatabaseSyncWorker";
-
         private static async Task<int> Main(string[] args)
         {
             ThreadPool.GetMaxThreads(out var maxWorkerThreads, out var maxCompletionPortThreads);
@@ -36,18 +35,20 @@ namespace DatabaseSyncWorker
 
             NpgsqlLogManager.Provider = new SerilogNpgqslLoggingProvider(NpgsqlLogLevel.Info);
 
-            IOptions options = null;
+            ReceptionistOptions options = null;
 
             Parser.Default.ParseArguments<ReceptionistOptions>(args)
                 .WithParsed(opts => options = opts);
 
             if (options == null)
             {
+                Console.Error.WriteLine(string.Join(" ", args));
                 return 1;
             }
 
             if (options.UnknownPositionalArguments.Any())
             {
+                Console.Error.WriteLine(string.Join(" ", args));
                 Console.Error.WriteLine($@"Unknown positional arguments: [{string.Join(", ", options.UnknownPositionalArguments)}]");
                 return 1;
             }
@@ -69,11 +70,12 @@ namespace DatabaseSyncWorker
             return 0;
         }
 
-        private static async Task RunAsync(IOptions options)
+        private static async Task RunAsync(ReceptionistOptions options)
         {
+            options.WorkerName = string.IsNullOrEmpty(options.WorkerName) ? $"{options.WorkerType}-{Guid.NewGuid()}" : options.WorkerName;
             if (string.IsNullOrEmpty(options.LogFileName))
             {
-                options.LogFileName = Path.Combine(Environment.CurrentDirectory, options.WorkerName + ".log");
+                options.LogFileName = Path.Combine(Environment.CurrentDirectory, Path.ChangeExtension(options.WorkerName, ".log"));
             }
 
             Log.Logger = new LoggerConfiguration()
@@ -83,69 +85,74 @@ namespace DatabaseSyncWorker
                 .WriteTo.File(options.LogFileName)
                 .CreateLogger();
 
-            Log.Debug($"Opened logfile {options.LogFileName}");
-
             var connectionParameters = new ConnectionParameters
             {
                 EnableProtocolLoggingAtStartup = true,
                 ProtocolLogging = new ProtocolLoggingParameters
                 {
-                    LogPrefix = Path.ChangeExtension(options.LogFileName, string.Empty) + "-protocol"
+                    LogPrefix = Path.ChangeExtension(options.LogFileName, string.Empty).TrimEnd('.') + "-protocol"
                 },
-                WorkerType = WorkerType,
-                DefaultComponentVtable = new ComponentVtable()
-            };
-
-
-            using (var connection = await WorkerConnection.ConnectAsync(options, connectionParameters))
-            {
-                var postgresOptions = new PostgresOptions(GetPostgresFlags(options, connection));
-                DatabaseSyncLogic databaseLogic = null;
-
-                var tableName = connection.GetWorkerFlag("postgres_tablename") ?? "postgres";
-
-                var databaseService = Task.Run(async () =>
+                WorkerType = options.WorkerType,
+                DefaultComponentVtable = new ComponentVtable(),
+                Network = new NetworkParameters
                 {
-                    using (var response = await connection.SendEntityQueryRequest(new EntityQuery { Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType() }))
+                    ConnectionType = NetworkConnectionType.ModularUdp,
+                    ConnectionTimeoutMillis = 5000,
+                    ModularUdp = new ModularUdpNetworkParameters
                     {
-                        if (response.ResultCount == 0)
-                        {
-                            throw new ServiceNotFoundException(nameof(DatabaseSyncService));
-                        }
-
-                        databaseLogic = new DatabaseSyncLogic(postgresOptions, tableName, connection, response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
-                        connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
-                    }
-                });
-
-                using (var databaseChanges = new DatabaseChanges<DatabaseSyncItem.DatabaseChangeNotification>(postgresOptions, tableName))
-                {
-                    foreach (var opList in connection.GetOpLists(TimeSpan.FromMilliseconds(16)))
-                    {
-                        var changes = databaseChanges.GetChanges();
-
-                        if (!changes.IsEmpty)
-                        {
-                            databaseLogic?.ProcessDatabaseSyncChanges(changes);
-                        }
-
-                        ProcessOpList(opList);
-
-                        if (options.PostgresFromWorkerFlags)
-                        {
-                            postgresOptions.ProcessOpList(opList);
-                        }
-
-                        connection.ProcessOpList(opList);
-                        databaseLogic?.ProcessOpList(opList);
-
-                        // Propagate exceptions.
-                        databaseService.Wait(TimeSpan.FromTicks(1));
+                        SecurityType = NetworkSecurityType.Insecure
                     }
                 }
+            };
+
+            Log.Debug($"Opened logfile {options.LogFileName}");
+
+            if (connectionParameters.EnableProtocolLoggingAtStartup)
+            {
+                Log.Debug($"Opened protocol logfile prefix {connectionParameters.ProtocolLogging.LogPrefix}");
             }
 
-            Log.Information("Disconnected from SpatialOS");
+            using var proxy = new UdpProxy();
+            using var cts = new CancellationTokenSource();
+
+            try
+            {
+                proxy.Start(((IReceptionistOptions) options).SpatialOsHost, 8018, 8018, cts.Token, Log.Debug);
+
+                using var connection = await WorkerConnection.ConnectAsync(options, connectionParameters);
+
+                var postgresOptions = new PostgresOptions(GetPostgresFlags(options, connection));
+
+                var tableName = connection.GetWorkerFlag("postgres_tablename") ?? "postgres";
+                var databaseLogic = new DatabaseSyncLogic(postgresOptions, tableName, connection);
+
+                using var databaseChanges = new DatabaseChanges<DatabaseSyncItem.DatabaseChangeNotification>(postgresOptions, tableName);
+                foreach (var opList in connection.GetOpLists(TimeSpan.FromMilliseconds(16)))
+                {
+                    var changes = databaseChanges.GetChanges();
+
+                    if (!changes.IsEmpty)
+                    {
+                        databaseLogic.ProcessDatabaseSyncChanges(changes);
+                    }
+
+                    ProcessOpList(opList);
+
+                    if (options.PostgresFromWorkerFlags)
+                    {
+                        postgresOptions.ProcessOpList(opList);
+                    }
+
+                    connection.ProcessOpList(opList);
+                    databaseLogic.ProcessOpList(opList);
+                }
+
+                Log.Information("Disconnected from SpatialOS");
+            }
+            finally
+            {
+                cts.Cancel();
+            }
         }
 
         private static PostgresOptions.GetStringDelegate GetPostgresFlags(IOptions options, WorkerConnection connection)
