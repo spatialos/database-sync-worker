@@ -1,9 +1,11 @@
-# Database Sync Worker (preview)
+# Database Sync Worker (experimental)
 [![Build status](https://badge.buildkite.com/eb40ef8885282f2482f0f0b4e0f2a93e1a6cf89e6541022108.svg?branch=master)](https://buildkite.com/improbable/database-sync-worker-premerge) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 The Database Sync Worker is a SpatialOS server-worker designed to easily sync and persist cross-session game data (such as player inventories) between SpatialOS and an external database.
 
-> If you intend to use this worker with the SpatialOS GDK for Unreal, we recommend following [this tutorial] instead of the below Setup guide. It takes you through integrating this worker in the [Example Project] and using it to store the “All Time Kills” and “Deaths” of the players in a Postgres database running on your local machine.
+> ⚠ The Database Sync Worker is **experimental**. We have made it available to gather feedback to help us shape this functionality, **but we are not committed to further developing it**. We do not recommend using it for production game development.
+
+> If you intend to use this worker with the SpatialOS GDK for Unreal, we recommend following [this tutorial](https://docs.improbable.io/unreal/latest/content/tutorials/dbsync/tutorial-dbsync-intro) instead of the Setup guide below. It takes you through integrating this worker in the GDK for Unreal [Example Project](https://github.com/spatialos/UnrealGDKExampleProject) and using it to store the “All Time Kills” and “Deaths” of the players in a Postgres database running on your local machine.
 
 ## Premise
 
