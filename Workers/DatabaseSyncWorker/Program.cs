@@ -36,7 +36,7 @@ namespace DatabaseSyncWorker
 
             NpgsqlLogManager.Provider = new SerilogNpgqslLoggingProvider(NpgsqlLogLevel.Info);
 
-            IOptions options = null;
+            IOptions? options = null;
 
             Parser.Default.ParseArguments<ReceptionistOptions>(args)
                 .WithParsed(opts => options = opts);
@@ -100,49 +100,46 @@ namespace DatabaseSyncWorker
             using (var connection = await WorkerConnection.ConnectAsync(options, connectionParameters))
             {
                 var postgresOptions = new PostgresOptions(GetPostgresFlags(options, connection));
-                DatabaseSyncLogic databaseLogic = null;
+                DatabaseSyncLogic? databaseLogic = null;
 
                 var tableName = connection.GetWorkerFlag("postgres_tablename") ?? "postgres";
 
                 var databaseService = Task.Run(async () =>
                 {
-                    using (var response = await connection.SendEntityQueryRequest(new EntityQuery { Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType() }))
+                    using var response = await connection.SendEntityQueryRequest(new EntityQuery { Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType() });
+                    if (response.ResultCount == 0)
                     {
-                        if (response.ResultCount == 0)
-                        {
-                            throw new ServiceNotFoundException(nameof(DatabaseSyncService));
-                        }
-
-                        databaseLogic = new DatabaseSyncLogic(postgresOptions, tableName, connection, response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
-                        connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
+                        throw new ServiceNotFoundException(nameof(DatabaseSyncService));
                     }
+
+                    databaseLogic = new DatabaseSyncLogic(postgresOptions, tableName, connection, response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
+                    connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
                 });
 
-                using (var databaseChanges = new DatabaseChanges<DatabaseSyncItem.DatabaseChangeNotification>(postgresOptions, tableName))
+                using var databaseChanges = new DatabaseChanges<DatabaseSyncItem.DatabaseChangeNotification>(postgresOptions, tableName);
+                foreach (var opList in connection.GetOpLists(TimeSpan.FromMilliseconds(16)))
                 {
-                    foreach (var opList in connection.GetOpLists(TimeSpan.FromMilliseconds(16)))
+                    var changes = databaseChanges.GetChanges();
+
+                    if (!changes.IsEmpty)
                     {
-                        var changes = databaseChanges.GetChanges();
-
-                        if (!changes.IsEmpty)
-                        {
-                            databaseLogic?.ProcessDatabaseSyncChanges(changes);
-                        }
-
-                        ProcessOpList(opList);
-
-                        if (options.PostgresFromWorkerFlags)
-                        {
-                            postgresOptions.ProcessOpList(opList);
-                        }
-
-                        connection.ProcessOpList(opList);
-                        databaseLogic?.ProcessOpList(opList);
-
-                        // Propagate exceptions.
-                        databaseService.Wait(TimeSpan.FromTicks(1));
+                        databaseLogic?.ProcessDatabaseSyncChanges(changes);
                     }
+
+                    ProcessOpList(opList);
+
+                    if (options.PostgresFromWorkerFlags)
+                    {
+                        postgresOptions.ProcessOpList(opList);
+                    }
+
+                    connection.ProcessOpList(opList);
+                    databaseLogic?.ProcessOpList(opList);
+
+                    // Propagate exceptions.
+                    databaseService.Wait(TimeSpan.FromTicks(1));
                 }
+
             }
 
             Log.Information("Disconnected from SpatialOS");
@@ -163,12 +160,7 @@ namespace DatabaseSyncWorker
                 }
 
                 var envFlag = Environment.GetEnvironmentVariable(key.ToUpperInvariant());
-                if (!string.IsNullOrEmpty(envFlag))
-                {
-                    return envFlag;
-                }
-
-                return PostgresOptions.GetFromIOptions(options, key, value);
+                return !string.IsNullOrEmpty(envFlag) ? envFlag : PostgresOptions.GetFromIOptions(options, key, value);
             };
         }
 

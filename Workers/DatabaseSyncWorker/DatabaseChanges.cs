@@ -13,23 +13,23 @@ namespace DatabaseSyncWorker
     public class DatabaseChanges<TType> : IDisposable
     {
         private ImmutableArray<TType> changes = ImmutableArray<TType>.Empty;
-        private CancellationTokenSource tcs;
+        private readonly CancellationTokenSource cts;
         private readonly Task task;
 
         public DatabaseChanges(PostgresOptions postgresOptions, string tableName)
         {
-            tcs = new CancellationTokenSource();
+            cts = new CancellationTokenSource();
 
             task = Task.Factory.StartNew(async unusedStateObject =>
             {
-                NpgsqlConnection connection = null;
+                NpgsqlConnection? connection = null;
 
-                while (tcs != null)
+                while (!cts.IsCancellationRequested)
                 {
                     var connectionString = postgresOptions.ConnectionString;
                     try
                     {
-                        tcs.Token.ThrowIfCancellationRequested();
+                        cts.Token.ThrowIfCancellationRequested();
 
                         connection = new NpgsqlConnection(connectionString);
                         connection.Open();
@@ -59,7 +59,7 @@ namespace DatabaseSyncWorker
 
                         while (connection.State == ConnectionState.Open)
                         {
-                            await connection.WaitAsync(tcs.Token);
+                            await connection.WaitAsync(cts.Token);
                         }
                     }
                     catch (TaskCanceledException)
@@ -69,7 +69,7 @@ namespace DatabaseSyncWorker
                     }
                     catch (Exception e)
                     {
-                        if (!tcs.Token.IsCancellationRequested)
+                        if (!cts.Token.IsCancellationRequested)
                         {
                             Log.Error(e, "LISTEN {TableName}", tableName);
                         }
@@ -79,7 +79,7 @@ namespace DatabaseSyncWorker
                         connection?.Dispose();
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(5), tcs.Token);
+                    await Task.Delay(TimeSpan.FromSeconds(5), cts.Token);
                 }
 
                 Log.Information("Stopped listening to {TableName}", tableName);
@@ -96,11 +96,10 @@ namespace DatabaseSyncWorker
 
         public void Dispose()
         {
-            tcs?.Cancel();
+            cts?.Cancel();
             task?.Wait();
 
-            tcs?.Dispose();
-            tcs = null;
+            cts?.Dispose();
         }
     }
 }

@@ -55,16 +55,33 @@ namespace DatabaseSyncWorker
                     Log.Information("Discovered hydration type {ComponentName}", method.DeclaringType?.FullName);
                     var attribute = method.GetCustomAttributes(typeof(HydrateAttribute)).Cast<HydrateAttribute>().First();
 
+                    if (method.DeclaringType == null)
+                    {
+                        continue;
+                    }
+
                     var property = method.DeclaringType.GetProperties(BindingFlags.Public | BindingFlags.Instance).First(IsProfileId);
+
+                    if (property.GetMethod == null)
+                    {
+                        Log.Warning("{ComponentName}.{MethodName}.Get is null", method.DeclaringType?.FullName, property.Name);
+                        continue;
+                    }
+
                     var fromSchemaData = method.DeclaringType.GetMethods(BindingFlags.Public | BindingFlags.Static).First(IsGetProfileIdFromSchemaData);
 
                     var hydrateDelegate = (Hydration.HydrateDelegate) method.CreateDelegate(typeof(Hydration.HydrateDelegate));
 
 
-                    var type = new HydrationType(hydrateDelegate, instance => (string) property.GetMethod.Invoke(instance, null), fields =>
+                    var type = new HydrationType(hydrateDelegate, instance =>
+                    {
+                        var result = property.GetMethod.Invoke(instance, null);
+                        return result == null ? "" : (string) result;
+                    }, fields =>
                     {
                         var args = new object[] { fields };
-                        return (string) fromSchemaData.Invoke(null, args);
+                        var result = fromSchemaData.Invoke(null, args);
+                        return result == null ? "" : (string) result;
                     });
 
                     components.Add(attribute.ComponentId, type);
