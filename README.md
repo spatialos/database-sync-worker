@@ -111,8 +111,8 @@ For example:
 
 If your project is entirely .NET Core C# based, then you can add Nuget package references to your `GeneratedCode` project:
 ```
-dotnet add GeneratedCode/GeneratedCode.csproj package "Improbable.Postgres.Schema" --version 0.0.1-preview
-dotnet add GeneratedCode/GeneratedCode.csproj package "Improbable.DatabaseSync.Schema" --version 0.0.2-preview
+dotnet add GeneratedCode/GeneratedCode.csproj package "Improbable.Postgres.Schema" --version 0.0.2-preview
+dotnet add GeneratedCode/GeneratedCode.csproj package "Improbable.DatabaseSync.Schema" --version 0.0.3-preview
 ```
 
 > By default, the `GeneratedCode` project already includes references to both of these projects.
@@ -253,9 +253,9 @@ Directly, from the command line: `dotnet run -p Workers/DatabaseSyncWorker`
 **macOS/Linux**
 `scripts/publish-linux-workers.sh`
 
-This will build a self-contained appplication, which can be found in `Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp3.0/linux-x64/publish`, ready for upload.
+This will build a self-contained appplication, which can be found in `Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp3.1/linux-x64/publish`, ready for upload.
 
-The executable entry point is `Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp3.0/linux-x64/publish/DatabaseSyncWorker`.
+The executable entry point is `Workers/DatabaseSyncWorker/bin/x64/Release/netcoreapp3.1/linux-x64/publish/DatabaseSyncWorker`.
 
 # Interacting with the database
 
