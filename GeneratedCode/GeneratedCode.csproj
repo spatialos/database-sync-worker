@@ -17,8 +17,8 @@
     <PackageReference Include="Improbable.WorkerSdkInterop" Version="14.1.0" />
     <PackageReference Include="Improbable.Schema.Compiler" Version="14.1.0" />
     <PackageReference Include="Improbable.DatabaseSync" Version="0.0.2-preview" />
-    <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
-    <PackageReference Include="Npgsql" Version="4.0.5" />
-    <PackageReference Include="System.Collections.Immutable" Version="1.6.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+    <PackageReference Include="Npgsql" Version="4.1.2" />
+    <PackageReference Include="System.Collections.Immutable" Version="1.7.0" />
   </ItemGroup>
 </Project>
