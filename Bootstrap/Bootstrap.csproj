@@ -1,15 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
     <Platforms>x64</Platforms>
-    <LangVersion>8.0</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CommandLineParser" Version="2.6.0" />
-    <PackageReference Include="Improbable.Postgres" Version="0.0.2-preview" />
-    <PackageReference Include="Improbable.DatabaseSync" Version="0.0.1-preview" />
-    <PackageReference Include="Serilog" Version="2.8.0" />
+    <PackageReference Include="CommandLineParser" Version="2.7.82" />
+    <PackageReference Include="Improbable.Postgres" Version="0.0.3-preview" />
+    <PackageReference Include="Improbable.DatabaseSync" Version="0.0.2-preview" />
+    <PackageReference Include="Serilog" Version="2.9.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="3.1.1" />
   </ItemGroup>
 

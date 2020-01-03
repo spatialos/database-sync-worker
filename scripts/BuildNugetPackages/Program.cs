@@ -77,9 +77,9 @@ namespace BuildNugetPackages
             var cacheDirectory = GetCacheDirectory();
             Console.Out.WriteLine("Find schema files in:");
             Console.Out.WriteLine(
-                $"  {Path.Combine(cacheDirectory, "improbable.postgres.schema", "0.0.1-preview", "content", "schema")}");
+                $"  {Path.Combine(cacheDirectory, "improbable.postgres.schema", "0.0.2-preview", "content", "schema")}");
             Console.Out.WriteLine(
-                $"  {Path.Combine(cacheDirectory, "improbable.databasesync.schema", "0.0.2-preview", "content", "schema")}");
+                $"  {Path.Combine(cacheDirectory, "improbable.databasesync.schema", "0.0.3-preview", "content", "schema")}");
         }
 
         private static void BuildLocal(LocalOptions local)
