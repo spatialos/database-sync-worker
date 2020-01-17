@@ -11,6 +11,7 @@ using Improbable.Stdlib;
 using Improbable.Postgres;
 using Improbable.Restricted;
 using Improbable.Worker.CInterop;
+using Newtonsoft.Json;
 using Npgsql;
 using NpgsqlTypes;
 using Serilog;
@@ -42,6 +43,7 @@ namespace DatabaseSyncWorker
         private readonly string tableName;
         private long concurrentBatchRequests;
         private readonly MetricsPusher metricsPusher;
+        private readonly CancellationTokenSource cts = new CancellationTokenSource();
 
         public DatabaseSyncLogic(PostgresOptions postgresOptions, string tableName, WorkerConnection connection, EntityId serviceEntityId, in DatabaseSyncService serviceEntity)
         {
@@ -68,6 +70,83 @@ namespace DatabaseSyncWorker
 
             metricsPusher = new MetricsPusher(this.postgresOptions);
             metricsPusher.StartPushingMetrics(TimeSpan.FromSeconds(10));
+
+            StartWatchingDatabase();
+        }
+
+        private void StartWatchingDatabase()
+        {
+            Task.Factory.StartNew(async unusedStateObject =>
+            {
+                NpgsqlConnection sqlConnection = null;
+
+                while (!cts.IsCancellationRequested && connection.GetConnectionStatusCode() == ConnectionStatusCode.Success)
+                {
+                    var connectionString = postgresOptions.ConnectionString;
+                    try
+                    {
+                        sqlConnection = new NpgsqlConnection(connectionString);
+                        sqlConnection.Open();
+
+                        Log.Information("Listening to {TableName}", tableName);
+
+                        sqlConnection.Notification += (sender, args) =>
+                        {
+                            try
+                            {
+                                var changeNotification = JsonConvert.DeserializeObject<DatabaseSyncItem.DatabaseChangeNotification>(args.Payload);
+                                Task.Run(() => ProcessDatabaseSyncChanges(changeNotification));
+
+                                Improbable.Postgres.Metrics.Inc(Improbable.Postgres.Metrics.TotalChangesReceived);
+                            }
+                            catch (Exception e)
+                            {
+                                Log.Error(e, "While parsing JSON for change notification");
+                            }
+                        };
+
+                        // Receive notifications from the database when rows change.
+                        using (var cmd = new NpgsqlCommand($"LISTEN {tableName}", sqlConnection))
+                        {
+                            cmd.ExecuteNonQuery();
+                        }
+
+                        while (sqlConnection.State == ConnectionState.Open)
+                        {
+                            await sqlConnection.WaitAsync(cts.Token).ConfigureAwait(false);
+                        }
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        // Don't log, avoid adding confusion to logs on a graceful shutdown.
+                        break;
+                    }
+                    catch (Exception e)
+                    {
+                        if (!cts.Token.IsCancellationRequested)
+                        {
+                            Log.Error(e, "LISTEN {TableName}", tableName);
+                        }
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            sqlConnection?.Dispose();
+                        }
+                        catch
+                        {
+                            // This is noisy, quiet it down.
+                        }
+
+                    }
+
+                    // Reconnection delay.
+                    await Task.Delay(TimeSpan.FromSeconds(5), cts.Token).ConfigureAwait(false);
+                }
+
+                Log.Information("Stopped listening to {TableName}", tableName);
+            }, cts.Token, TaskCreationOptions.LongRunning);
         }
 
         public static IReadOnlyDictionary<uint, Reflection.HydrationType> HydrateComponents => restoreComponents ?? (restoreComponents = Reflection.FindHydrateMethods());
@@ -158,7 +237,7 @@ namespace DatabaseSyncWorker
                         profileToEntityId.AddOrUpdate(kv.Value, kv.Key, (profile, entityId) => kv.Key);
                     }
 
-                    Parallel.ForEach(activated, async entityId => await HydrateComponentAsync(ops[entityId], componentId, entityId));
+                    Parallel.ForEach(activated, async entityId => await HydrateComponentAsync(ops[entityId], componentId, entityId).ConfigureAwait(false));
                 }
             }
 
@@ -649,55 +728,49 @@ namespace DatabaseSyncWorker
             });
         }
 
-        public void ProcessDatabaseSyncChanges(ImmutableArray<DatabaseSyncItem.DatabaseChangeNotification> changes)
+        public void ProcessDatabaseSyncChanges(DatabaseSyncItem.DatabaseChangeNotification change)
         {
-            Task.Run(() =>
+            var changedPaths = new HashSet<string>();
+
+            var newProfile = GetProfileRoot(change.New.Path);
+            var oldProfile = GetProfileRoot(change.Old?.Path);
+
+            if (!string.IsNullOrEmpty(newProfile))
             {
-                var changedPaths = new HashSet<string>();
+                changedPaths.Add(change.New.Path);
+            }
 
-                foreach (var change in changes)
+            if (!string.IsNullOrEmpty(oldProfile))
+            {
+                changedPaths.Add(change.Old?.Path);
+            }
+
+            // Work out database roundtrip time
+            if (change.Old.HasValue && pendingUpdates.TryGetValue(change.Old.Value.Path, out var opStartTime))
+            {
+                Improbable.Postgres.Metrics.Observe(Improbable.Postgres.Metrics.RoundTripDuration, (long) (DateTime.Now - opStartTime).TotalMilliseconds);
+                pendingUpdates.TryRemove(change.Old.Value.Path, out _);
+            }
+
+            if (!string.IsNullOrEmpty(newProfile) && profileToEntityId.TryGetValue(newProfile, out var newEntityId))
+            {
+                foreach (var kv in HydrateComponents)
                 {
-                    var newProfile = GetProfileRoot(change.New.Path);
-                    var oldProfile = GetProfileRoot(change.Old?.Path);
-
-                    if (!string.IsNullOrEmpty(newProfile))
-                    {
-                        changedPaths.Add(change.New.Path);
-                    }
-
-                    if (!string.IsNullOrEmpty(oldProfile))
-                    {
-                        changedPaths.Add(change.Old?.Path);
-                    }
-
-                    // Work out database roundtrip time
-                    if (change.Old.HasValue && pendingUpdates.TryGetValue(change.Old.Value.Path, out var opStartTime))
-                    {
-                        Improbable.Postgres.Metrics.Observe(Improbable.Postgres.Metrics.RoundTripDuration, (long) (DateTime.Now - opStartTime).TotalMilliseconds);
-                        pendingUpdates.TryRemove(change.Old.Value.Path, out _);
-                    }
-
-                    if (!string.IsNullOrEmpty(newProfile) && profileToEntityId.TryGetValue(newProfile, out var newEntityId))
-                    {
-                        foreach (var kv in HydrateComponents)
-                        {
-                            var _ = HydrateComponentAsync(newProfile, kv.Key, newEntityId);
-                        }
-                    }
-
-                    if (!string.IsNullOrEmpty(oldProfile) && profileToEntityId.TryGetValue(oldProfile, out var oldEntityId))
-                    {
-                        foreach (var kv in HydrateComponents)
-                        {
-                            var _ = HydrateComponentAsync(oldProfile, kv.Key, oldEntityId);
-                        }
-                    }
+                    var _ = HydrateComponentAsync(newProfile, kv.Key, newEntityId);
                 }
+            }
 
-                var update = new DatabaseSyncService.Update();
-                update.AddPathsUpdatedEvent(new PathsUpdated(changedPaths));
-                DatabaseSyncService.SendUpdate(connection, serviceEntityId, update, NoLoopbackParameters);
-            });
+            if (!string.IsNullOrEmpty(oldProfile) && profileToEntityId.TryGetValue(oldProfile, out var oldEntityId))
+            {
+                foreach (var kv in HydrateComponents)
+                {
+                    var _ = HydrateComponentAsync(oldProfile, kv.Key, oldEntityId);
+                }
+            }
+
+            var update = new DatabaseSyncService.Update();
+            update.AddPathsUpdatedEvent(new PathsUpdated(changedPaths));
+            DatabaseSyncService.SendUpdate(connection, serviceEntityId, update, NoLoopbackParameters);
         }
 
         private static string GetProfileRoot(string profileId)
@@ -1128,6 +1201,7 @@ namespace DatabaseSyncWorker
 
         public void Dispose()
         {
+            cts.Cancel();
             metricsPusher.Dispose();
         }
 

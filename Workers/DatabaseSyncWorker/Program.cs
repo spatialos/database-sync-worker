@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -54,7 +55,7 @@ namespace DatabaseSyncWorker
 
             try
             {
-                await RunAsync(options);
+                await RunAsync(options).ConfigureAwait(false);
             }
             catch (Exception e)
             {
@@ -97,38 +98,27 @@ namespace DatabaseSyncWorker
             };
 
 
-            using (var connection = await WorkerConnection.ConnectAsync(options, connectionParameters))
+            using (var connection = await WorkerConnection.ConnectAsync(options, connectionParameters).ConfigureAwait(false))
             {
                 var postgresOptions = new PostgresOptions(GetPostgresFlags(options, connection));
-                DatabaseSyncLogic databaseLogic = null;
+                DatabaseSyncLogic databaseLogic;
 
                 var tableName = connection.GetWorkerFlag("postgres_tablename") ?? "postgres";
 
-                var databaseService = Task.Run(async () =>
+                using (var response = await connection.SendEntityQueryRequest(new EntityQuery { Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType() }).ConfigureAwait(false))
                 {
-                    using (var response = await connection.SendEntityQueryRequest(new EntityQuery { Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType() }))
-                    {
                         if (response.ResultCount == 0)
                         {
                             throw new ServiceNotFoundException(nameof(DatabaseSyncService));
                         }
 
                         databaseLogic = new DatabaseSyncLogic(postgresOptions, tableName, connection, response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
-                        connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
                     }
-                });
 
-                using (var databaseChanges = new DatabaseChanges<DatabaseSyncItem.DatabaseChangeNotification>(postgresOptions, tableName))
-                {
-                    foreach (var opList in connection.GetOpLists(TimeSpan.FromMilliseconds(16)))
-                    {
-                        var changes = databaseChanges.GetChanges();
+                connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
 
-                        if (!changes.IsEmpty)
+                foreach (var opList in connection.GetOpLists())
                         {
-                            databaseLogic?.ProcessDatabaseSyncChanges(changes);
-                        }
-
                         ProcessOpList(opList);
 
                         if (options.PostgresFromWorkerFlags)
@@ -136,12 +126,7 @@ namespace DatabaseSyncWorker
                             postgresOptions.ProcessOpList(opList);
                         }
 
-                        connection.ProcessOpList(opList);
-                        databaseLogic?.ProcessOpList(opList);
-
-                        // Propagate exceptions.
-                        databaseService.Wait(TimeSpan.FromTicks(1));
-                    }
+                    databaseLogic.ProcessOpList(opList);
                 }
             }
 
