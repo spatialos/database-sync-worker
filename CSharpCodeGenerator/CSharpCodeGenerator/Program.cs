@@ -12,7 +12,6 @@ using Improbable.Schema.Bundle;
 using Improbable.Stdlib.CSharpCodeGen;
 using Improbable.WorkerSdkInterop.CSharpCodeGen;
 using Serilog;
-using Serilog.Core;
 using static Improbable.CSharpCodeGen.Case;
 using Types = Improbable.CSharpCodeGen.Types;
 
@@ -98,7 +97,6 @@ namespace CodeGenerator
                 };
 
                 var allContent = new Dictionary<string, StringBuilder>();
-                var nestedTypes = new HashSet<string>();
 
                 // Pass 1: generate all type content.
                 foreach (var t in types)
@@ -132,28 +130,25 @@ namespace CodeGenerator
 
                     // Nested types.
                     builder.AppendJoin(Environment.NewLine, t.NestedTypes.Select(e => GenerateType(e, allContent[e.QualifiedName].ToString(), bundle)));
-
-                    nestedTypes.UnionWith(t.NestedTypes.Select(type => type.QualifiedName));
-                    nestedTypes.UnionWith(t.NestedEnums.Select(type => type.QualifiedName));
                 }
 
                 // Pass 2: Generate final content.
-                foreach (var t in types.Where(type => !nestedTypes.Contains(type.QualifiedName)))
+                foreach (var t in types.Where(type => string.IsNullOrEmpty(type.OuterType)))
                 {
                     var content = allContent[t.QualifiedName];
 
                     WriteFile(options, Types.TypeToFilename(t.QualifiedName), $@"
-namespace {GetPascalCaseNamespaceFromTypeName(t.QualifiedName)}
+namespace {t.Namespace()}
 {{
 {Indent(1, GenerateType(t, content.ToString().TrimEnd(), bundle))}
 }}");
                 }
 
                 // Enums.
-                foreach (var (key, value) in bundle.Enums.Where(type => !nestedTypes.Contains(type.Key)))
+                foreach (var (key, value) in bundle.Enums.Where(type => string.IsNullOrEmpty(type.Value.OuterType)))
                 {
                     WriteFile(options, Types.TypeToFilename(key), $@"
-namespace {GetPascalCaseNamespaceFromTypeName(key)}
+namespace {value.Namespace()}
 {{
 {Indent(1, GenerateEnum(value, bundle))}
 }}");
@@ -195,7 +190,7 @@ namespace {GetPascalCaseNamespaceFromTypeName(key)}
             var values = new StringBuilder();
             foreach (var v in enumDef.Values)
             {
-                values.AppendLine($"{AllCapsSnakeCaseToPascalCase(v.Name)} = {v.Value},");
+                values.AppendLine($"{v.Name()} = {v.Value},");
             }
 
             return $@"// Generated from {bundle.TypeToFile[enumDef.QualifiedName].CanonicalPath}({enumDef.SourceReference.Line},{enumDef.SourceReference.Column})
@@ -207,11 +202,8 @@ public enum {enumDef.Name}
 
         private static string GenerateType(TypeDescription type, string content, Bundle bundle)
         {
-            var typeName = GetPascalCaseNameFromTypeName(type.QualifiedName);
-
-
             return $@"// Generated from {bundle.TypeToFile[type.QualifiedName].CanonicalPath}({type.SourceReference.Line},{type.SourceReference.Column})
-public readonly struct {typeName} : global::System.IEquatable<{typeName}>
+public readonly struct {type.TypeName()} : global::System.IEquatable<{type.TypeName()}>
 {{
 {Indent(1, content)}
 }}";
