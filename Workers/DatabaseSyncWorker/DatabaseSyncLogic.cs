@@ -78,7 +78,7 @@ namespace DatabaseSyncWorker
         {
             Task.Factory.StartNew(async unusedStateObject =>
             {
-                NpgsqlConnection sqlConnection = null;
+                NpgsqlConnection? sqlConnection = null;
 
                 while (!cts.IsCancellationRequested && connection.GetConnectionStatusCode() == ConnectionStatusCode.Success)
                 {
@@ -739,9 +739,9 @@ namespace DatabaseSyncWorker
                 changedPaths.Add(change.New.Path);
             }
 
-            if (!string.IsNullOrEmpty(oldProfile))
+            if (!string.IsNullOrEmpty(oldProfile) && change.Old.HasValue)
             {
-                changedPaths.Add(change.Old?.Path);
+                changedPaths.Add(change.Old.Value.Path);
             }
 
             // Work out database roundtrip time
