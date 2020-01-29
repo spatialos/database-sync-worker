@@ -81,7 +81,7 @@ namespace DatabaseSyncWorker
                     {
                         var args = new object[] { fields };
                         var result = fromSchemaData.Invoke(null, args);
-                        return result == null ? "" : (string) result;
+                        return result as string ?? string.Empty;
                     });
 
                     components.Add(attribute.ComponentId, type);

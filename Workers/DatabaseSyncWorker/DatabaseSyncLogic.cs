@@ -29,7 +29,7 @@ namespace DatabaseSyncWorker
         private readonly WhenAllComponents whenWorker = new WhenAllComponents(Worker.ComponentId);
         private readonly WhenAllComponents whenWorkerClient = new WhenAllComponents(Worker.ComponentId, PlayerClient.ComponentId);
 
-        private static IReadOnlyDictionary<uint, Reflection.HydrationType>? _restoreComponents;
+        private static IReadOnlyDictionary<uint, Reflection.HydrationType>? hydrateComponents;
         private readonly ConcurrentDictionary<string, string> clientWorkers = new ConcurrentDictionary<string, string>();
         private readonly ConcurrentDictionary<string, string> adminWorkers = new ConcurrentDictionary<string, string>();
         private readonly WorkerConnection connection;
@@ -148,7 +148,7 @@ namespace DatabaseSyncWorker
             }, cts.Token, TaskCreationOptions.LongRunning);
         }
 
-        public static IReadOnlyDictionary<uint, Reflection.HydrationType> HydrateComponents => _restoreComponents ??= Reflection.FindHydrateMethods();
+        public static IReadOnlyDictionary<uint, Reflection.HydrationType> HydrateComponents => hydrateComponents ??= Reflection.FindHydrateMethods();
 
         public void ProcessOpList(OpList opList)
         {
