@@ -37,7 +37,7 @@ namespace DatabaseSyncWorker
 
             NpgsqlLogManager.Provider = new SerilogNpgqslLoggingProvider(NpgsqlLogLevel.Info);
 
-            IOptions options = null;
+            IOptions? options = null;
 
             Parser.Default.ParseArguments<ReceptionistOptions>(args)
                 .WithParsed(opts => options = opts);
@@ -107,27 +107,28 @@ namespace DatabaseSyncWorker
 
                 using (var response = await connection.SendEntityQueryRequest(new EntityQuery { Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType() }).ConfigureAwait(false))
                 {
-                        if (response.ResultCount == 0)
-                        {
-                            throw new ServiceNotFoundException(nameof(DatabaseSyncService));
-                        }
-
-                        databaseLogic = new DatabaseSyncLogic(postgresOptions, tableName, connection, response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
+                    if (response.ResultCount == 0)
+                    {
+                        throw new ServiceNotFoundException(nameof(DatabaseSyncService));
                     }
+
+                    databaseLogic = new DatabaseSyncLogic(postgresOptions, tableName, connection, response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
+                };
 
                 connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
 
                 foreach (var opList in connection.GetOpLists())
-                        {
-                        ProcessOpList(opList);
+                {
+                    ProcessOpList(opList);
 
-                        if (options.PostgresFromWorkerFlags)
-                        {
-                            postgresOptions.ProcessOpList(opList);
-                        }
+                    if (options.PostgresFromWorkerFlags)
+                    {
+                        postgresOptions.ProcessOpList(opList);
+                    }
 
                     databaseLogic.ProcessOpList(opList);
                 }
+
             }
 
             Log.Information("Disconnected from SpatialOS");
@@ -148,12 +149,7 @@ namespace DatabaseSyncWorker
                 }
 
                 var envFlag = Environment.GetEnvironmentVariable(key.ToUpperInvariant());
-                if (!string.IsNullOrEmpty(envFlag))
-                {
-                    return envFlag;
-                }
-
-                return PostgresOptions.GetFromIOptions(options, key, value);
+                return !string.IsNullOrEmpty(envFlag) ? envFlag : PostgresOptions.GetFromIOptions(options, key, value);
             };
         }
 

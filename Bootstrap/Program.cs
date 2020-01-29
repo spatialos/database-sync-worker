@@ -52,11 +52,9 @@ namespace Bootstrap
                 var sql = string.Join(";", options.Commands);
                 Log.Information("Running {Sql}", sql);
 
-                using (var connection = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using (var cmd = connection.Command(sql))
-                {
-                    cmd.Command.ExecuteNonQuery();
-                }
+                using var connection = new ConnectionWrapper(postgresOptions.ConnectionString);
+                using var cmd = connection.Command(sql);
+                cmd.Command.ExecuteNonQuery();
 
                 Log.Information("Done.");
 
@@ -75,13 +73,11 @@ namespace Bootstrap
             {
                 var commands = DatabaseSyncItem.InitializeDatabase(options.TableName);
 
-                using (var connection = new ConnectionWrapper(CreatePostgresOptions(options).ConnectionString))
-                using (var command = connection.Command(commands))
-                {
-                    Log.Information("Initializing {TableName}...", options.TableName);
-                    command.Command.ExecuteNonQuery();
-                    Log.Information("Done.");
-                }
+                using var connection = new ConnectionWrapper(CreatePostgresOptions(options).ConnectionString);
+                using var command = connection.Command(commands);
+                Log.Information("Initializing {TableName}...", options.TableName);
+                command.Command.ExecuteNonQuery();
+                Log.Information("Done.");
             }
             catch (Exception e)
             {
@@ -97,12 +93,7 @@ namespace Bootstrap
             return new PostgresOptions((key, value) =>
             {
                 var envFlag = Environment.GetEnvironmentVariable(key.ToUpperInvariant());
-                if (!string.IsNullOrEmpty(envFlag))
-                {
-                    return envFlag;
-                }
-
-                return PostgresOptions.GetFromIOptions(options, key, value);
+                return !string.IsNullOrEmpty(envFlag) ? envFlag : PostgresOptions.GetFromIOptions(options, key, value);
             });
         }
     }

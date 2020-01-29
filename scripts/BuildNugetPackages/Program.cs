@@ -225,18 +225,18 @@ namespace BuildNugetPackages
         private class LocalOptions
         {
             [Option("source-dir", Default = "../csharp-worker-template")]
-            public string SourceDir { get; set; }
+            public string SourceDir { get; set; } = null!;
         }
 
         [Verb("git")]
         private class GitOptions
         {
             [Option("repository", Default = CSharpWorkerRepo)]
-            public string Repository { get; set; }
+            public string Repository { get; set; } = null!;
 
-            [Option("branch", Default = "master")] public string Branch { get; set; }
+            [Option("branch", Default = "master")] public string Branch { get; set; } = null!;
 
-            [Option("commit", Default = "HEAD")] public string Commit { get; set; }
+            [Option("commit", Default = "HEAD")] public string Commit { get; set; } = null!;
         }
     }
 }

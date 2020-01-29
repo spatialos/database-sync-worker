@@ -29,7 +29,7 @@ namespace DatabaseSyncWorker
         private readonly WhenAllComponents whenWorker = new WhenAllComponents(Worker.ComponentId);
         private readonly WhenAllComponents whenWorkerClient = new WhenAllComponents(Worker.ComponentId, PlayerClient.ComponentId);
 
-        private static IReadOnlyDictionary<uint, Reflection.HydrationType> restoreComponents;
+        private static IReadOnlyDictionary<uint, Reflection.HydrationType>? hydrateComponents;
         private readonly ConcurrentDictionary<string, string> clientWorkers = new ConcurrentDictionary<string, string>();
         private readonly ConcurrentDictionary<string, string> adminWorkers = new ConcurrentDictionary<string, string>();
         private readonly WorkerConnection connection;
@@ -55,9 +55,9 @@ namespace DatabaseSyncWorker
 
             this.tableName = tableName;
 
-            foreach (var kv in HydrateComponents)
+            foreach (var (key, _) in HydrateComponents)
             {
-                hydrateAllComponents.Add(kv.Key, new WhenAllComponents(kv.Key));
+                hydrateAllComponents.Add(key, new WhenAllComponents(key));
             }
 
             if (!serviceEntity.WriteWorkerTypes.Any())
@@ -78,7 +78,7 @@ namespace DatabaseSyncWorker
         {
             Task.Factory.StartNew(async unusedStateObject =>
             {
-                NpgsqlConnection sqlConnection = null;
+                NpgsqlConnection? sqlConnection = null;
 
                 while (!cts.IsCancellationRequested && connection.GetConnectionStatusCode() == ConnectionStatusCode.Success)
                 {
@@ -138,7 +138,6 @@ namespace DatabaseSyncWorker
                         {
                             // This is noisy, quiet it down.
                         }
-
                     }
 
                     // Reconnection delay.
@@ -149,7 +148,7 @@ namespace DatabaseSyncWorker
             }, cts.Token, TaskCreationOptions.LongRunning);
         }
 
-        public static IReadOnlyDictionary<uint, Reflection.HydrationType> HydrateComponents => restoreComponents ?? (restoreComponents = Reflection.FindHydrateMethods());
+        public static IReadOnlyDictionary<uint, Reflection.HydrationType> HydrateComponents => hydrateComponents ??= Reflection.FindHydrateMethods();
 
         public void ProcessOpList(OpList opList)
         {
@@ -191,54 +190,61 @@ namespace DatabaseSyncWorker
 
             foreach (var entityId in whenWorkerClient.Activated)
             {
-                if (clients.TryGet(entityId, out var client) && workers.TryGet(entityId, out var worker))
+                if (!clients.TryGet(entityId, out var client) || !workers.TryGet(entityId, out var worker))
                 {
-                    Log.Debug("Logged in {Id} => {Path}", worker.WorkerId, client.PlayerIdentity.PlayerIdentifier);
-                    clientWorkers.AddOrUpdate(client.PlayerIdentity.PlayerIdentifier, worker.WorkerId, (key, oldValue) => worker.WorkerId);
+                    continue;
                 }
+
+                Log.Debug("Logged in {Id} => {Path}", worker.WorkerId, client.PlayerIdentity.PlayerIdentifier);
+                clientWorkers.AddOrUpdate(client.PlayerIdentity.PlayerIdentifier, worker.WorkerId, (key, oldValue) => worker.WorkerId);
             }
 
             foreach (var entityId in whenWorker.Activated)
             {
-                if (workers.TryGet(entityId, out var worker) && writeWorkerTypes.Contains(worker.WorkerType))
+                if (!workers.TryGet(entityId, out var worker) || !writeWorkerTypes.Contains(worker.WorkerType))
                 {
-                    Log.Debug("Logged in admin {Id} => {Type} {Self}", worker.WorkerId, worker.WorkerType, worker.WorkerId == connection.WorkerId ? "(self)": "");
-                    adminWorkers.AddOrUpdate(worker.WorkerId, worker.WorkerType, (key, oldValue) => worker.WorkerType);
+                    continue;
                 }
+
+                Log.Debug("Logged in admin {Id} => {Type} {Self}", worker.WorkerId, worker.WorkerType, worker.WorkerId == connection.WorkerId ? "(self)": "");
+                adminWorkers.AddOrUpdate(worker.WorkerId, worker.WorkerType, (key, oldValue) => worker.WorkerType);
             }
 
-            foreach (var whenAll in hydrateAllComponents)
+            foreach (var (componentId, components) in hydrateAllComponents)
             {
-                whenAll.Value.ProcessOpList(opList);
+                components.ProcessOpList(opList);
 
-                var componentId = whenAll.Key;
-                var activated = whenAll.Value.Activated;
+                var activated = components.Activated;
 
-                if (!activated.IsEmpty)
+                if (activated.IsEmpty)
                 {
-                    // Extract the profileId from the incoming schema data, to avoid needing to deserialize the whole object.
-                    var ops = opList
-                        .OfOpType<AddComponentOp>()
-                        .OfComponent(componentId)
-                        .Where(op => op.Data.SchemaData.HasValue && activated.Contains(op.EntityId))
-                        .ToDictionary(op => new EntityId(op.EntityId), op =>
-                        {
-                            var profile = HydrateComponents[componentId].ProfileIdFromSchemaData(op.Data.SchemaData.Value.GetFields());
-                            if (string.IsNullOrEmpty(profile))
-                            {
-                                Log.Error("{EntityId} has an empty profileId field", op.EntityId);
-                            }
-
-                            return profile;
-                        });
-
-                    foreach (var kv in ops)
-                    {
-                        profileToEntityId.AddOrUpdate(kv.Value, kv.Key, (profile, entityId) => kv.Key);
-                    }
-
-                    Parallel.ForEach(activated, async entityId => await HydrateComponentAsync(ops[entityId], componentId, entityId).ConfigureAwait(false));
+                    continue;
                 }
+
+                // Extract the profileId from the incoming schema data, to avoid needing to deserialize the whole object.
+                var ops = opList
+                    .OfOpType<AddComponentOp>()
+                    .OfComponent(componentId)
+                    .Where(op => op.Data.SchemaData.HasValue && activated.Contains(op.EntityId))
+                    .ToDictionary(op => new EntityId(op.EntityId), op =>
+                    {
+#pragma warning disable 8629 // Nullable value type may be null. <- the presence of a value is checked in the Where query above.
+                        var profile = HydrateComponents[componentId].ProfileIdFromSchemaData(op.Data.SchemaData.Value.GetFields());
+#pragma warning restore 8629
+                        if (string.IsNullOrEmpty(profile))
+                        {
+                            Log.Error("{EntityId} has an empty profileId field", op.EntityId);
+                        }
+
+                        return profile;
+                    });
+
+                foreach (var (entityId, profile) in ops)
+                {
+                    profileToEntityId.AddOrUpdate(profile, entityId, (oldProfile, oldEntityId) => entityId);
+                }
+
+                Parallel.ForEach(activated, async entityId => await HydrateComponentAsync(ops[entityId], componentId, entityId).ConfigureAwait(false));
             }
 
             foreach (var commandRequestOp in opList
@@ -311,26 +317,24 @@ namespace DatabaseSyncWorker
 
             Task.Run(() =>
             {
-                using (var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using (var cmd = wrapper.Command())
+                using var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString);
+                using var cmd = wrapper.Command();
+                try
                 {
-                    try
-                    {
-                        AddDeleteStatement(cmd.Command, deleteRequest);
+                    AddDeleteStatement(cmd.Command, deleteRequest);
 
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
-                        cmd.Command.Prepare();
+                    cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
+                    cmd.Command.Prepare();
 
-                        ulong affected = (ulong) cmd.Command.ExecuteNonQuery();
-                        Log.Debug("Removed {Count} rows", affected);
+                    var affected = (ulong) cmd.Command.ExecuteNonQuery();
+                    Log.Debug("Removed {Count} rows", affected);
 
-                        service.SendDeleteResponse(commandRequestOp.RequestId, new DeleteResponse(affected));
-                    }
-                    catch (Exception e)
-                    {
-                        Log.Error(e, "{@Request}: {Sql}", deleteRequest, cmd.Command.CommandText);
-                        connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-                    }
+                    service.SendDeleteResponse(commandRequestOp.RequestId, new DeleteResponse(affected));
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "{@Request}: {Sql}", deleteRequest, cmd.Command.CommandText);
+                    connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
                 }
             });
         }
@@ -340,7 +344,7 @@ namespace DatabaseSyncWorker
             return CanWorkerTypeWrite(commandRequestOp) && IsRequestValid(deleteRequest.WorkerId, deleteRequest.Path);
         }
 
-        private void AddCreateStatement(NpgsqlCommand command, CreateRequest createRequest, string suffix = "")
+        private static void AddCreateStatement(NpgsqlCommand command, CreateRequest createRequest, string suffix = "")
         {
             var query = $@"insert into $TABLENAME (path, name, count) values(@path{suffix}, @name{suffix}, @count{suffix});";
             command.Parameters.AddWithValue($"name{suffix}", NpgsqlDbType.Text, createRequest.Item.Name);
@@ -350,7 +354,7 @@ namespace DatabaseSyncWorker
             command.CommandText += query;
         }
 
-        private void AddDeleteStatement(NpgsqlCommand command, DeleteRequest deleteRequest, string suffix = "")
+        private static void AddDeleteStatement(NpgsqlCommand command, DeleteRequest deleteRequest, string suffix = "")
         {
             var query = $@"delete from $TABLENAME where path <@ @path{suffix};";
             command.Parameters.AddWithValue($"path{suffix}", NpgsqlDbType.Unknown, deleteRequest.Path);
@@ -358,7 +362,7 @@ namespace DatabaseSyncWorker
             command.CommandText += query;
         }
 
-        private void AddSetParentStatement(NpgsqlCommand command, SetParentRequest setParentRequest, string suffix = "")
+        private static void AddSetParentStatement(NpgsqlCommand command, SetParentRequest setParentRequest, string suffix = "")
         {
             // '||' is the string/ltree concatenation operator, that is, (newParent + subpath(path, nlevel(sourcePath) - 1)
             var query = $"update $TABLENAME set path = @newParent{suffix} || subpath(path, nlevel(@sourcePath) - 1) where path <@ @sourcePath{suffix} returning path::text;";
@@ -368,7 +372,7 @@ namespace DatabaseSyncWorker
             command.CommandText += query;
         }
 
-        private void AddIncrementStatement(NpgsqlCommand command, IncrementRequest incrementRequest, string suffix = "")
+        private static void AddIncrementStatement(NpgsqlCommand command, IncrementRequest incrementRequest, string suffix = "")
         {
             var query = $"update $TABLENAME set count = count + @amount{suffix} where path ~ @itemPath{suffix} returning count;";
             command.Parameters.AddWithValue($"itemPath{suffix}", NpgsqlDbType.Unknown, incrementRequest.Path);
@@ -377,7 +381,7 @@ namespace DatabaseSyncWorker
             command.CommandText += query;
         }
 
-        private void AddDecrementStatement(NpgsqlCommand command, DecrementRequest decrementRequest, string suffix = "")
+        private static void AddDecrementStatement(NpgsqlCommand command, DecrementRequest decrementRequest, string suffix = "")
         {
             var query = $"update $TABLENAME set count = count - @amount{suffix} where path ~ @itemPath{suffix} returning count;";
             command.Parameters.AddWithValue($"itemPath{suffix}", NpgsqlDbType.Unknown, decrementRequest.Path);
@@ -386,7 +390,7 @@ namespace DatabaseSyncWorker
             command.CommandText += query;
         }
 
-        private void AddGetItemStatement(NpgsqlCommand command, GetItemRequest getItemRequest, string suffix = "")
+        private static void AddGetItemStatement(NpgsqlCommand command, GetItemRequest getItemRequest, string suffix = "")
         {
             var query = $"select {DatabaseSyncItem.SelectClause} from $TABLENAME where path ~ @path{suffix};";
             command.Parameters.AddWithValue($"path{suffix}", NpgsqlDbType.Unknown, getItemRequest.Path);
@@ -394,7 +398,7 @@ namespace DatabaseSyncWorker
             command.CommandText += query;
         }
 
-        private void AddGetDatabaseSyncStatement(NpgsqlCommand command, GetItemsRequest getItems, string suffix = "")
+        private static void AddGetDatabaseSyncStatement(NpgsqlCommand command, GetItemsRequest getItems, string suffix = "")
         {
             var query = $"select {DatabaseSyncItem.SelectClause} from $TABLENAME where path ~ @itemChildren{suffix};";
 
@@ -440,8 +444,8 @@ namespace DatabaseSyncWorker
             Task.Run(() =>
             {
                 using (var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using (var cmd = wrapper.Command())
                 {
+                    using var cmd = wrapper.Command();
                     try
                     {
                         AddCreateStatement(cmd.Command, createRequest);
@@ -558,167 +562,161 @@ namespace DatabaseSyncWorker
                 {
                     var responses = new List<CompositeResponse>(batch.Actions.Length);
 
-                    using (var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString))
-                    using (var transaction = wrapper.Connection.BeginTransaction(IsolationLevel.RepeatableRead))
-                    {
-                        Interlocked.Increment(ref concurrentBatchRequests);
+                    using var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString);
+                    using var transaction = wrapper.Connection.BeginTransaction(IsolationLevel.RepeatableRead);
+                    Interlocked.Increment(ref concurrentBatchRequests);
 
-                        for (var index = 0; index < batch.Actions.Length; index++)
+                    for (var index = 0; index < batch.Actions.Length; index++)
+                    {
+                        var op = batch.Actions[index];
+                        using var cmd = wrapper.Command();
+                        if (op.Increment.HasValue)
                         {
-                            var op = batch.Actions[index];
-                            using (var cmd = wrapper.Command())
+                            AddIncrementStatement(cmd.Command, op.Increment.Value);
+                        }
+                        else if (op.Decrement.HasValue)
+                        {
+                            AddDecrementStatement(cmd.Command, op.Decrement.Value);
+                        }
+                        else if (op.SetParent.HasValue)
+                        {
+                            AddSetParentStatement(cmd.Command, op.SetParent.Value);
+                        }
+                        else if (op.Create.HasValue)
+                        {
+                            AddCreateStatement(cmd.Command, op.Create.Value);
+                        }
+                        else if (op.Delete.HasValue)
+                        {
+                            AddDeleteStatement(cmd.Command, op.Delete.Value);
+                        }
+                        else if (op.GetItem.HasValue)
+                        {
+                            AddGetItemStatement(cmd.Command, op.GetItem.Value);
+                        }
+                        else if (op.GetItems.HasValue)
+                        {
+                            AddGetDatabaseSyncStatement(cmd.Command, op.GetItems.Value);
+                        }
+
+                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
+
+                        try
+                        {
+                            using var reader = cmd.Command.ExecuteReader();
+                            try
                             {
+                                var statement = cmd.Command.Statements[0];
+
                                 if (op.Increment.HasValue)
                                 {
-                                    AddIncrementStatement(cmd.Command, op.Increment.Value);
+                                    if (reader.Read())
+                                    {
+                                        responses.Add(new CompositeResponse(new IncrementResponse(reader.GetInt64(0))));
+                                    }
+                                    else
+                                    {
+                                        Log.Error("Action[{Index}]: Rows affected '{Rows}' != '1'. '{Sql}' {Parameters}", index, statement.Rows, statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
+                                        validationErrors[index] = CommandErrors.InvalidRequest;
+                                    }
                                 }
                                 else if (op.Decrement.HasValue)
                                 {
-                                    AddDecrementStatement(cmd.Command, op.Decrement.Value);
+                                    if (reader.Read())
+                                    {
+                                        responses.Add(new CompositeResponse(decrement: new DecrementResponse(reader.GetInt64(0))));
+                                    }
+                                    else
+                                    {
+                                        Log.Error("Action[{Index}]: Rows affected '{Rows}' != '1'. '{Sql}' {Parameters}", index, statement.Rows, statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
+                                        validationErrors[index] = CommandErrors.InvalidRequest;
+                                    }
                                 }
                                 else if (op.SetParent.HasValue)
                                 {
-                                    AddSetParentStatement(cmd.Command, op.SetParent.Value);
+                                    if (reader.Read())
+                                    {
+                                        responses.Add(new CompositeResponse(setParent: new SetParentResponse(reader.GetString(0), statement.Rows)));
+                                    }
+                                    else
+                                    {
+                                        Log.Error("Action[{Index}]: Rows affected '{Rows}' == '0'. '{Sql}' {Parameters}", index, statement.Rows, statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
+                                        validationErrors[index] = CommandErrors.InvalidRequest;
+                                    }
                                 }
                                 else if (op.Create.HasValue)
                                 {
-                                    AddCreateStatement(cmd.Command, op.Create.Value);
+                                    if (statement.Rows > 0)
+                                    {
+                                        responses.Add(new CompositeResponse(create: new CreateResponse()));
+                                    }
+                                    else
+                                    {
+                                        Log.Error("Action[{Index}]: Rows affected '{Rows}' == '0'. '{Sql}' {Parameters}", index, statement.Rows, statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
+                                        validationErrors[index] = CommandErrors.InvalidRequest;
+                                    }
                                 }
                                 else if (op.Delete.HasValue)
                                 {
-                                    AddDeleteStatement(cmd.Command, op.Delete.Value);
+                                    responses.Add(new CompositeResponse(delete: new DeleteResponse(statement.Rows)));
                                 }
                                 else if (op.GetItem.HasValue)
                                 {
-                                    AddGetItemStatement(cmd.Command, op.GetItem.Value);
+                                    if (reader.Read())
+                                    {
+                                        responses.Add(new CompositeResponse(getItem: new GetItemResponse(DatabaseSyncItem.FromQuery(reader))));
+                                    }
+                                    else
+                                    {
+                                        Log.Error("Action[{Index}]: Rows affected '{Rows}' == '1'. '{Sql}' {Parameters}", index, statement.Rows, statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
+                                        validationErrors[index] = CommandErrors.InvalidRequest;
+                                    }
                                 }
                                 else if (op.GetItems.HasValue)
                                 {
-                                    AddGetDatabaseSyncStatement(cmd.Command, op.GetItems.Value);
-                                }
-
-                                cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
-
-                                try
-                                {
-                                    using (var reader = cmd.Command.ExecuteReader())
+                                    var parentExists = false;
+                                    var children = ReadGetDatabaseSyncResponse(op.GetItems.Value, reader, ref parentExists);
+                                    if (!parentExists)
                                     {
-                                        try
-                                        {
-                                            var statement = cmd.Command.Statements[0];
-
-                                            if (op.Increment.HasValue)
-                                            {
-                                                if (reader.Read())
-                                                {
-                                                    responses.Add(new CompositeResponse(new IncrementResponse(reader.GetInt64(0))));
-                                                }
-                                                else
-                                                {
-                                                    Log.Error("Action[{Index}]: Rows affected '{Rows}' != '1'. '{Sql}' {Parameters}", index, statement.Rows, statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
-                                                    validationErrors[index] = CommandErrors.InvalidRequest;
-                                                }
-                                            }
-                                            else if (op.Decrement.HasValue)
-                                            {
-                                                if (reader.Read())
-                                                {
-                                                    responses.Add(new CompositeResponse(decrement: new DecrementResponse(reader.GetInt64(0))));
-                                                }
-                                                else
-                                                {
-                                                    Log.Error("Action[{Index}]: Rows affected '{Rows}' != '1'. '{Sql}' {Parameters}", index, statement.Rows, statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
-                                                    validationErrors[index] = CommandErrors.InvalidRequest;
-                                                }
-                                            }
-                                            else if (op.SetParent.HasValue)
-                                            {
-                                                if (reader.Read())
-                                                {
-                                                    responses.Add(new CompositeResponse(setParent: new SetParentResponse(reader.GetString(0), statement.Rows)));
-                                                }
-                                                else
-                                                {
-                                                    Log.Error("Action[{Index}]: Rows affected '{Rows}' == '0'. '{Sql}' {Parameters}", index, statement.Rows, statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
-                                                    validationErrors[index] = CommandErrors.InvalidRequest;
-                                                }
-                                            }
-                                            else if (op.Create.HasValue)
-                                            {
-                                                if (statement.Rows > 0)
-                                                {
-                                                    responses.Add(new CompositeResponse(create: new CreateResponse()));
-                                                }
-                                                else
-                                                {
-                                                    Log.Error("Action[{Index}]: Rows affected '{Rows}' == '0'. '{Sql}' {Parameters}", index, statement.Rows, statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
-                                                    validationErrors[index] = CommandErrors.InvalidRequest;
-                                                }
-                                            }
-                                            else if (op.Delete.HasValue)
-                                            {
-                                                responses.Add(new CompositeResponse(delete: new DeleteResponse(statement.Rows)));
-                                            }
-                                            else if (op.GetItem.HasValue)
-                                            {
-                                                if (reader.Read())
-                                                {
-                                                    responses.Add(new CompositeResponse(getItem: new GetItemResponse(DatabaseSyncItem.FromQuery(reader))));
-                                                }
-                                                else
-                                                {
-                                                    Log.Error("Action[{Index}]: Rows affected '{Rows}' == '1'. '{Sql}' {Parameters}", index, statement.Rows, statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
-                                                    validationErrors[index] = CommandErrors.InvalidRequest;
-                                                }
-                                            }
-                                            else if (op.GetItems.HasValue)
-                                            {
-                                                var parentExists = false;
-                                                var children = ReadGetDatabaseSyncResponse(op.GetItems.Value, reader, ref parentExists);
-                                                if (!parentExists)
-                                                {
-                                                    Log.Error("No rows found. '{Sql}' {Parameters}", statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
-                                                    validationErrors[index] = CommandErrors.InvalidRequest;
-                                                }
-                                                else
-                                                {
-                                                    responses.Add(new CompositeResponse(getItems: new GetItemsResponse(children)));
-                                                }
-                                            }
-                                        }
-                                        catch (Exception e)
-                                        {
-                                            Log.Error(e, nameof(BatchOperationRequest));
-                                            validationErrors[index] = CommandErrors.InternalError;
-                                        }
+                                        Log.Error("No rows found. '{Sql}' {Parameters}", statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
+                                        validationErrors[index] = CommandErrors.InvalidRequest;
+                                    }
+                                    else
+                                    {
+                                        responses.Add(new CompositeResponse(getItems: new GetItemsResponse(children)));
                                     }
                                 }
-                                catch (Exception e)
-                                {
-                                    Log.Error(e, "{@Request}: {Sql} {Parameters}", batch, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
-                                    validationErrors = Enumerable.Repeat(CommandErrors.InvalidRequest, validationErrors.Length).ToArray();
-                                }
+                            }
+                            catch (Exception e)
+                            {
+                                Log.Error(e, nameof(BatchOperationRequest));
+                                validationErrors[index] = CommandErrors.InternalError;
                             }
                         }
-
-                        if (validationErrors.Any(a => a != CommandErrors.None))
+                        catch (Exception e)
                         {
-                            connection.SendCommandFailure(commandRequestOp.RequestId, string.Join(",", validationErrors.Select(a => a.ToString("D"))));
-                            transaction.Rollback();
+                            Log.Error(e, "{@Request}: {Sql} {Parameters}", batch, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
+                            validationErrors = Enumerable.Repeat(CommandErrors.InvalidRequest, validationErrors.Length).ToArray();
                         }
-                        else
-                        {
-                            transaction.Commit();
-                            service.SendBatchResponse(commandRequestOp.RequestId, new BatchOperationResponse(responses));
-                        }
-
-                        if (concurrentBatchRequests > 1)
-                        {
-                            Log.Debug("Concurrent batch operations {Count}", concurrentBatchRequests);
-                        }
-
-                        Interlocked.Decrement(ref concurrentBatchRequests);
                     }
+
+                    if (validationErrors.Any(a => a != CommandErrors.None))
+                    {
+                        connection.SendCommandFailure(commandRequestOp.RequestId, string.Join(",", validationErrors.Select(a => a.ToString("D"))));
+                        transaction.Rollback();
+                    }
+                    else
+                    {
+                        transaction.Commit();
+                        service.SendBatchResponse(commandRequestOp.RequestId, new BatchOperationResponse(responses));
+                    }
+
+                    if (concurrentBatchRequests > 1)
+                    {
+                        Log.Debug("Concurrent batch operations {Count}", concurrentBatchRequests);
+                    }
+
+                    Interlocked.Decrement(ref concurrentBatchRequests);
                 }
                 catch (Exception e)
                 {
@@ -740,9 +738,9 @@ namespace DatabaseSyncWorker
                 changedPaths.Add(change.New.Path);
             }
 
-            if (!string.IsNullOrEmpty(oldProfile))
+            if (!string.IsNullOrEmpty(oldProfile) && change.Old.HasValue)
             {
-                changedPaths.Add(change.Old?.Path);
+                changedPaths.Add(change.Old.Value.Path);
             }
 
             // Work out database roundtrip time
@@ -773,7 +771,7 @@ namespace DatabaseSyncWorker
             DatabaseSyncService.SendUpdate(connection, serviceEntityId, update, NoLoopbackParameters);
         }
 
-        private static string GetProfileRoot(string profileId)
+        private static string GetProfileRoot(string? profileId)
         {
             if (string.IsNullOrEmpty(profileId))
             {
@@ -814,13 +812,14 @@ namespace DatabaseSyncWorker
                 return false;
             }
 
-            if (associatedWorkerId != clientWorkerId)
+            if (associatedWorkerId == clientWorkerId)
             {
-                Log.Error("Worker {WorkerId} is not associated with {Profile}", clientWorkerId, profileRoot);
-                return false;
+                return true;
             }
 
-            return true;
+            Log.Error("Worker {WorkerId} is not associated with {Profile}", clientWorkerId, profileRoot);
+            return false;
+
         }
 
         private bool CanWorkerTypeWrite(CommandRequestOp request)
@@ -874,36 +873,34 @@ namespace DatabaseSyncWorker
 
             Task.Run(() =>
             {
-                using (var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using (var cmd = wrapper.Command())
+                using var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString);
+                using var cmd = wrapper.Command();
+                try
                 {
-                    try
+                    AddSetParentStatement(cmd.Command, setParentRequest);
+                    cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
+                    cmd.Command.Prepare();
+
+                    pendingUpdates.TryAdd(setParentRequest.Path, DateTime.Now);
+
+                    var path = cmd.Command.ExecuteScalar();
+                    if (path == null)
                     {
-                        AddSetParentStatement(cmd.Command, setParentRequest);
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
-                        cmd.Command.Prepare();
-
-                        pendingUpdates.TryAdd(setParentRequest.Path, DateTime.Now);
-
-                        var path = cmd.Command.ExecuteScalar();
-                        if (path == null)
-                        {
-                            connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-                            return;
-                        }
-
-                        service.SendSetParentResponse(commandRequestOp.RequestId, new SetParentResponse((string) path, cmd.Command.Statements[0].Rows));
-                    }
-                    catch (Exception e)
-                    {
-                        Log.Error(e, "{@Request}: {Sql} {Parameters}", setParentRequest, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
                         connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
+                        return;
                     }
+
+                    service.SendSetParentResponse(commandRequestOp.RequestId, new SetParentResponse((string) path, cmd.Command.Statements[0].Rows));
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "{@Request}: {Sql} {Parameters}", setParentRequest, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
+                    connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
                 }
             });
         }
 
-        private bool ValidateSetParentRequest(in SetParentRequest setParentRequest)
+        private static bool ValidateSetParentRequest(in SetParentRequest setParentRequest)
         {
             return ValidateBaseRequest(setParentRequest.WorkerId, setParentRequest.Path) && !string.IsNullOrEmpty(setParentRequest.NewParent);
         }
@@ -935,32 +932,30 @@ namespace DatabaseSyncWorker
 
             Task.Run(() =>
             {
-                using (var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using (var cmd = wrapper.Command())
+                using var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString);
+                using var cmd = wrapper.Command();
+                try
                 {
-                    try
+                    AddDecrementStatement(cmd.Command, decrementRequest);
+                    cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
+                    cmd.Command.Prepare();
+
+                    pendingUpdates.TryAdd(decrementRequest.Path, DateTime.Now);
+
+                    var newValueObject = cmd.Command.ExecuteScalar();
+                    if (newValueObject == null)
                     {
-                        AddDecrementStatement(cmd.Command, decrementRequest);
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
-                        cmd.Command.Prepare();
-
-                        pendingUpdates.TryAdd(decrementRequest.Path, DateTime.Now);
-
-                        var newValueObject = cmd.Command.ExecuteScalar();
-                        if (newValueObject == null)
-                        {
-                            connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-                            return;
-                        }
-
-                        var newValue = (long) newValueObject;
-                        service.SendDecrementResponse(commandRequestOp.RequestId, new DecrementResponse(newValue));
-                    }
-                    catch (Exception e)
-                    {
-                        Log.Error(e, "{@Request}: {Sql} {Parameters}", decrementRequest, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
                         connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
+                        return;
                     }
+
+                    var newValue = (long) newValueObject;
+                    service.SendDecrementResponse(commandRequestOp.RequestId, new DecrementResponse(newValue));
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "{@Request}: {Sql} {Parameters}", decrementRequest, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
+                    connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
                 }
             });
         }
@@ -993,61 +988,61 @@ namespace DatabaseSyncWorker
 
             Task.Run(() =>
             {
-                using (var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using (var cmd = wrapper.Command())
+                using var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString);
+                using var cmd = wrapper.Command();
+                try
                 {
-                    try
+                    AddIncrementStatement(cmd.Command, incrementRequest);
+                    cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
+                    cmd.Command.Prepare();
+
+                    pendingUpdates.TryAdd(incrementRequest.Path, DateTime.Now);
+
+                    var newValueObject = cmd.Command.ExecuteScalar();
+                    if (newValueObject == null)
                     {
-                        AddIncrementStatement(cmd.Command, incrementRequest);
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
-                        cmd.Command.Prepare();
-
-                        pendingUpdates.TryAdd(incrementRequest.Path, DateTime.Now);
-
-                        var newValueObject = cmd.Command.ExecuteScalar();
-                        if (newValueObject == null)
-                        {
-                            connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-                            return;
-                        }
-
-                        var newValue = (long) newValueObject;
-                        service.SendIncrementResponse(commandRequestOp.RequestId, new IncrementResponse(newValue));
+                        connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
+                        return;
                     }
-                    catch (Exception e)
-                    {
-                        Log.Error(e, "{@Request}: {Sql} {Parameters}", incrementRequest, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
-                        connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InternalError);
-                    }
+
+                    var newValue = (long) newValueObject;
+                    service.SendIncrementResponse(commandRequestOp.RequestId, new IncrementResponse(newValue));
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "{@Request}: {Sql} {Parameters}", incrementRequest, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
+                    connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InternalError);
                 }
             });
         }
 
-        private bool ValidateBaseRequest(string workerId, string path)
+        private static bool ValidateBaseRequest(string workerId, string path)
         {
             return !string.IsNullOrEmpty(workerId) && !string.IsNullOrEmpty(path);
         }
 
-        private bool ValidateIncrementRequest(in IncrementRequest incrementRequest)
+        private static bool ValidateIncrementRequest(in IncrementRequest incrementRequest)
         {
-            if (!ValidateBaseRequest(incrementRequest.WorkerId, incrementRequest.Path) || incrementRequest.Amount <= 0)
+            if (ValidateBaseRequest(incrementRequest.WorkerId, incrementRequest.Path) && incrementRequest.Amount > 0)
             {
-                Log.Error("Invalid: {@IncrementRequest}", incrementRequest);
-                return false;
+                return true;
             }
 
-            return true;
+            Log.Error("Invalid: {@IncrementRequest}", incrementRequest);
+            return false;
+
         }
 
-        private bool ValidateDecrementRequest(in DecrementRequest decrementRequest)
+        private static bool ValidateDecrementRequest(in DecrementRequest decrementRequest)
         {
-            if (!ValidateBaseRequest(decrementRequest.WorkerId, decrementRequest.Path) || decrementRequest.Amount <= 0)
+            if (ValidateBaseRequest(decrementRequest.WorkerId, decrementRequest.Path) && decrementRequest.Amount > 0)
             {
-                Log.Error("Invalid: {@IncrementRequest}", decrementRequest);
-                return false;
+                return true;
             }
 
-            return true;
+            Log.Error("Invalid: {@IncrementRequest}", decrementRequest);
+            return false;
+
         }
 
         private bool AuthorizeIncrementRequest(CommandRequestOp commandRequestOp, IncrementRequest incrementRequest)
@@ -1075,38 +1070,34 @@ namespace DatabaseSyncWorker
 
             Task.Run(() =>
             {
-                using (var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using (var cmd = wrapper.Command())
+                using var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString);
+                using var cmd = wrapper.Command();
+                try
                 {
-                    try
+                    AddGetDatabaseSyncStatement(cmd.Command, getDatabaseSyncRequest);
+
+                    cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
+                    cmd.Command.Prepare();
+
+                    using var reader = cmd.Command.ExecuteReader();
+                    var parentExists = false;
+                    var children = ReadGetDatabaseSyncResponse(getDatabaseSyncRequest, reader, ref parentExists);
+
+                    if (!parentExists)
                     {
-                        AddGetDatabaseSyncStatement(cmd.Command, getDatabaseSyncRequest);
-
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
-                        cmd.Command.Prepare();
-
-                        using (var reader = cmd.Command.ExecuteReader())
-                        {
-                            var parentExists = false;
-                            var children = ReadGetDatabaseSyncResponse(getDatabaseSyncRequest, reader, ref parentExists);
-
-                            if (!parentExists)
-                            {
-                                var statement = cmd.Command.Statements[0];
-                                Log.Error("No rows found. '{Sql}' {Parameters}", statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
-                                connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-                            }
-                            else
-                            {
-                                service.SendGetItemsResponse(commandRequestOp.RequestId, new GetItemsResponse(children));
-                            }
-                        }
+                        var statement = cmd.Command.Statements[0];
+                        Log.Error("No rows found. '{Sql}' {Parameters}", statement.SQL, statement.InputParameters.Select(p => p.Value?.ToString()));
+                        connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
                     }
-                    catch (Exception e)
+                    else
                     {
-                        Log.Error(e, "{@Request}: {Sql} {Parameters}", getDatabaseSyncRequest, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
-                        connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InternalError);
+                        service.SendGetItemsResponse(commandRequestOp.RequestId, new GetItemsResponse(children));
                     }
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "{@Request}: {Sql} {Parameters}", getDatabaseSyncRequest, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
+                    connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InternalError);
                 }
             });
         }
@@ -1162,34 +1153,30 @@ namespace DatabaseSyncWorker
 
             Task.Run(() =>
             {
-                using (var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString))
-                using (var cmd = wrapper.Command($"select {DatabaseSyncItem.SelectClause} from {tableName} where path ~ @path"))
+                using var wrapper = new ConnectionWrapper(postgresOptions.ConnectionString);
+                using var cmd = wrapper.Command($"select {DatabaseSyncItem.SelectClause} from {tableName} where path ~ @path");
+                try
                 {
-                    try
-                    {
-                        cmd.Command.Parameters.AddWithValue("path", NpgsqlDbType.Unknown, getItemRequest.Path);
-                        cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
-                        cmd.Command.Prepare();
+                    cmd.Command.Parameters.AddWithValue("path", NpgsqlDbType.Unknown, getItemRequest.Path);
+                    cmd.Command.CommandText = cmd.Command.CommandText.Replace("$TABLENAME", tableName);
+                    cmd.Command.Prepare();
 
-                        using (var reader = cmd.Command.ExecuteReader())
-                        {
-                            if (reader.Read())
-                            {
-                                var item = DatabaseSyncItem.FromQuery(reader);
-                                service.SendGetItemResponse(commandRequestOp.RequestId, new GetItemResponse(item));
-                                // Nb: there can only be one matching response here.
-                            }
-                            else
-                            {
-                                connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
-                            }
-                        }
-                    }
-                    catch (Exception e)
+                    using var reader = cmd.Command.ExecuteReader();
+                    if (reader.Read())
                     {
-                        Log.Error(e, "{@Request}: {Sql} {Parameters}", getItemRequest, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
-                        connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InternalError);
+                        var item = DatabaseSyncItem.FromQuery(reader);
+                        service.SendGetItemResponse(commandRequestOp.RequestId, new GetItemResponse(item));
+                        // Nb: there can only be one matching response here.
                     }
+                    else
+                    {
+                        connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InvalidRequest);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "{@Request}: {Sql} {Parameters}", getItemRequest, cmd.Command.CommandText, cmd.Command.Parameters.Select(p => p.Value?.ToString()));
+                    connection.SendCommandFailure(commandRequestOp.RequestId, CommandErrors.InternalError);
                 }
             });
         }
@@ -1209,7 +1196,7 @@ namespace DatabaseSyncWorker
 
         #region Metrics
 
-        private void AddGaugeMetric(Metrics metrics, string key, double value)
+        private static void AddGaugeMetric(Metrics metrics, string key, double value)
         {
             key = $"database_sync_{key}";
             if (!metrics.GaugeMetrics.ContainsKey(key))
@@ -1224,9 +1211,9 @@ namespace DatabaseSyncWorker
 
         public void UpdateMetrics(Metrics metrics)
         {
-            foreach (var kv in Improbable.Postgres.Metrics.GetCounts())
+            foreach (var (key, value) in Improbable.Postgres.Metrics.GetCounts())
             {
-                AddGaugeMetric(metrics, kv.Key, kv.Value);
+                AddGaugeMetric(metrics, key, value);
             }
         }
 
