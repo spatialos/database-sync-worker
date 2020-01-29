@@ -138,7 +138,6 @@ namespace DatabaseSyncWorker
                         {
                             // This is noisy, quiet it down.
                         }
-
                     }
 
                     // Reconnection delay.

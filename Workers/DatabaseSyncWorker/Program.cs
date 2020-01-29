@@ -107,13 +107,13 @@ namespace DatabaseSyncWorker
 
                 using (var response = await connection.SendEntityQueryRequest(new EntityQuery { Constraint = new ComponentConstraint(DatabaseSyncService.ComponentId), ResultType = new SnapshotResultType() }).ConfigureAwait(false))
                 {
-                        if (response.ResultCount == 0)
-                        {
-                            throw new ServiceNotFoundException(nameof(DatabaseSyncService));
-                        }
-
-                        databaseLogic = new DatabaseSyncLogic(postgresOptions, tableName, connection, response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
+                    if (response.ResultCount == 0)
+                    {
+                        throw new ServiceNotFoundException(nameof(DatabaseSyncService));
                     }
+
+                    databaseLogic = new DatabaseSyncLogic(postgresOptions, tableName, connection, response.Results.First().Key, DatabaseSyncService.CreateFromSnapshot(response.Results.First().Value));
+                };
 
                 connection.StartSendingMetrics(databaseLogic.UpdateMetrics);
 
