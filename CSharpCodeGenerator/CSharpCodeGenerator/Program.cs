@@ -36,8 +36,8 @@ namespace CSharpCodeGenerator
         [Option("--database-table-name", Description = "The name of the table that generated SQL will operate on.")]
         public string DatabaseTableName { get; } = "postgres";
 
-        [Option("--database-output-dir", Description = "The path to write the generated SQL code to.")]
-        public string DatabaseOutputDir { get; } = "sql";
+        [Option("--sql-output-dir", Description = "The path to write the generated SQL code to.")]
+        public string SqlOutputDir { get; } = "sql";
 
         [Option("--project-file", Description = "The path to the spatialos.json file")]
         public string ProjectFile { get; set; } = null!;
@@ -167,7 +167,7 @@ namespace {value.Namespace()}
                 foreach (var (type, sql) in sqlTypes)
                 {
                     var fileName = type.Replace(".", "_").ToLowerInvariant();
-                    fileName = Path.Combine(DatabaseOutputDir, Path.ChangeExtension(fileName, ".sql"));
+                    fileName = Path.Combine(SqlOutputDir, Path.ChangeExtension(fileName, ".sql"));
                     WriteFile(fileName, sql);
                 }
 
