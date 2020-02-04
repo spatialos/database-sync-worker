@@ -10,8 +10,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DatabaseSyncWorker", "Worke
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GeneratedCode", "GeneratedCode\GeneratedCode.csproj", "{7D4FCE2D-E139-4CAA-92A0-03E2586C3A04}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Bootstrap", "Bootstrap\Bootstrap.csproj", "{4AFB1AB7-473B-4620-8529-55DF03CE72F3}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CSharpCodeGenerator", "CSharpCodeGenerator\CSharpCodeGenerator\CSharpCodeGenerator.csproj", "{F1E2ECD6-1998-479F-AF15-D3B3131BAD5A}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Workers", "Workers", "{382C3281-9759-41CE-B25C-34ACACE3A3A8}"
@@ -38,12 +36,6 @@ Global
 		{7D4FCE2D-E139-4CAA-92A0-03E2586C3A04}.Release|Any CPU.ActiveCfg = Release|x64
 		{7D4FCE2D-E139-4CAA-92A0-03E2586C3A04}.Release|x64.ActiveCfg = Release|x64
 		{7D4FCE2D-E139-4CAA-92A0-03E2586C3A04}.Release|x64.Build.0 = Release|x64
-		{4AFB1AB7-473B-4620-8529-55DF03CE72F3}.Debug|Any CPU.ActiveCfg = Debug|x64
-		{4AFB1AB7-473B-4620-8529-55DF03CE72F3}.Debug|x64.ActiveCfg = Debug|x64
-		{4AFB1AB7-473B-4620-8529-55DF03CE72F3}.Debug|x64.Build.0 = Debug|x64
-		{4AFB1AB7-473B-4620-8529-55DF03CE72F3}.Release|Any CPU.ActiveCfg = Release|x64
-		{4AFB1AB7-473B-4620-8529-55DF03CE72F3}.Release|x64.ActiveCfg = Release|x64
-		{4AFB1AB7-473B-4620-8529-55DF03CE72F3}.Release|x64.Build.0 = Release|x64
 		{F1E2ECD6-1998-479F-AF15-D3B3131BAD5A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{F1E2ECD6-1998-479F-AF15-D3B3131BAD5A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F1E2ECD6-1998-479F-AF15-D3B3131BAD5A}.Debug|x64.ActiveCfg = Debug|Any CPU

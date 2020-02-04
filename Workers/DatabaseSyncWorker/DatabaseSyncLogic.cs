@@ -43,9 +43,9 @@ namespace DatabaseSyncWorker
         private readonly string tableName;
         private long concurrentBatchRequests;
         private readonly MetricsPusher metricsPusher;
-        private readonly CancellationTokenSource cts = new CancellationTokenSource();
+        private readonly CancellationTokenSource mergedCts;
 
-        public DatabaseSyncLogic(PostgresOptions postgresOptions, string tableName, WorkerConnection connection, EntityId serviceEntityId, in DatabaseSyncService serviceEntity)
+        public DatabaseSyncLogic(PostgresOptions postgresOptions, string tableName, WorkerConnection connection, EntityId serviceEntityId, in DatabaseSyncService serviceEntity, CancellationToken token)
         {
             this.postgresOptions = postgresOptions;
             this.connection = connection;
@@ -65,37 +65,41 @@ namespace DatabaseSyncWorker
                 throw new Exception($"{nameof(DatabaseSyncService)} has no write worker types defined.");
             }
 
+            mergedCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+
             writeWorkerTypes = new HashSet<string>(serviceEntity.WriteWorkerTypes);
             adminWorkers.TryAdd(connection.WorkerId, connection.WorkerId);
 
             metricsPusher = new MetricsPusher(this.postgresOptions);
             metricsPusher.StartPushingMetrics(TimeSpan.FromSeconds(10));
 
-            StartWatchingDatabase();
+            StartWatchingDatabase(token);
         }
 
-        private void StartWatchingDatabase()
+        private void StartWatchingDatabase(CancellationToken token)
         {
             Task.Factory.StartNew(async unusedStateObject =>
             {
                 NpgsqlConnection? sqlConnection = null;
 
-                while (!cts.IsCancellationRequested && connection.GetConnectionStatusCode() == ConnectionStatusCode.Success)
+                while (!token.IsCancellationRequested)
                 {
                     var connectionString = postgresOptions.ConnectionString;
+                    Log.Information("Trying {connection}", connectionString);
+
                     try
                     {
                         sqlConnection = new NpgsqlConnection(connectionString);
                         sqlConnection.Open();
 
-                        Log.Information("Listening to {TableName}", tableName);
+                        Log.Information("Listening to {TableName} on Postgres Version {PostgreSqlVersion}", tableName, sqlConnection.PostgreSqlVersion);
 
                         sqlConnection.Notification += (sender, args) =>
                         {
                             try
                             {
                                 var changeNotification = JsonConvert.DeserializeObject<DatabaseSyncItem.DatabaseChangeNotification>(args.Payload);
-                                Task.Run(() => ProcessDatabaseSyncChanges(changeNotification));
+                                Task.Run(() => ProcessDatabaseSyncChanges(changeNotification), token);
 
                                 Improbable.Postgres.Metrics.Inc(Improbable.Postgres.Metrics.TotalChangesReceived);
                             }
@@ -113,7 +117,7 @@ namespace DatabaseSyncWorker
 
                         while (sqlConnection.State == ConnectionState.Open)
                         {
-                            await sqlConnection.WaitAsync(cts.Token).ConfigureAwait(false);
+                            await sqlConnection.WaitAsync(token).ConfigureAwait(false);
                         }
                     }
                     catch (TaskCanceledException)
@@ -123,7 +127,7 @@ namespace DatabaseSyncWorker
                     }
                     catch (Exception e)
                     {
-                        if (!cts.Token.IsCancellationRequested)
+                        if (!token.IsCancellationRequested)
                         {
                             Log.Error(e, "LISTEN {TableName}", tableName);
                         }
@@ -141,11 +145,11 @@ namespace DatabaseSyncWorker
                     }
 
                     // Reconnection delay.
-                    await Task.Delay(TimeSpan.FromSeconds(5), cts.Token).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromSeconds(5), token).ConfigureAwait(false);
                 }
 
                 Log.Information("Stopped listening to {TableName}", tableName);
-            }, cts.Token, TaskCreationOptions.LongRunning);
+            }, token, TaskCreationOptions.LongRunning);
         }
 
         public static IReadOnlyDictionary<uint, Reflection.HydrationType> HydrateComponents => hydrateComponents ??= Reflection.FindHydrateMethods();
@@ -244,7 +248,7 @@ namespace DatabaseSyncWorker
                     profileToEntityId.AddOrUpdate(profile, entityId, (oldProfile, oldEntityId) => entityId);
                 }
 
-                Parallel.ForEach(activated, async entityId => await HydrateComponentAsync(ops[entityId], componentId, entityId).ConfigureAwait(false));
+                Parallel.ForEach(activated, async entityId => await HydrateComponentAsync(ops[entityId], componentId, entityId, mergedCts.Token).ConfigureAwait(false));
             }
 
             foreach (var commandRequestOp in opList
@@ -1188,7 +1192,7 @@ namespace DatabaseSyncWorker
 
         public void Dispose()
         {
-            cts.Cancel();
+            mergedCts.Cancel();
             metricsPusher.Dispose();
         }
 

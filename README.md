@@ -160,11 +160,11 @@ This is accomplished by modifying [worker flags].
         },
         {
         "name": "postgres_database",
-        "value": "items"
+        "value": "postgres"
         },
         {
         "name": "postgres_tablename",
-        "value": "items"
+        "value": "postgres"
         },
         {
         "name": "postgres_additional",
@@ -218,28 +218,9 @@ DBSync stores its data in PostgreSQL.
 The data that is stored is derived from the `DatabaseSyncItem` type in [`database_sync.schema`]. The `CodeGenerator` uses the Nuget package `Improbable.Postgres.CSharpCodeGen` to generate both C# helpers and SQL to safely map data back and forth between SpatialOS and the database.
 This code is used while the worker is running in SpatialOS, and at project setup time to setup the database to the right state.
 
-* The default database is `"items"`.
-* The default table in this database is also `"items"`. This contains all of the hierarchical data.
+* The default database is `"postgres"`.
+* The default table in this database is `"postgres"`. This contains all of the hierarchical data.
 * The default metrics table in this database is `"metrics"`. This contains various metrics the worker collects about timings, command counts, and failures.
-
-
-**Local, Windows**
-
-`scripts/reset-database.ps1`
-
-**Local, macOS/Linux**
-
-`scripts/reset-database.sh`
-
-**Remote, Windows**
-
-`scripts/reset-database.ps1 --postgres-host "_your_instance_hostname" --postgres-username "_your_instance_username_" --postgres-password "DO_NOT_USE_IN_PRODUCTION"`
-
-**Remote, macOS/Linux**
-
-`scripts/reset-database.sh --postgres-host "_your_instance_hostname" --postgres-username "_your_instance_username_" --postgres-password "DO_NOT_USE_IN_PRODUCTION"`
-
-> NOTE: The `reset-database` script  `DROPS` the `"items"` database each time you run it.
 
 ## Building and running locally
 

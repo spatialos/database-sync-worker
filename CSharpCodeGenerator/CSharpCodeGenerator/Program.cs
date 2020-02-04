@@ -1,62 +1,60 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using CommandLine;
+using System.Threading;
 using Improbable.CSharpCodeGen;
 using Improbable.DatabaseSync.CSharpCodeGen;
 using Improbable.Postgres.CSharpCodeGen;
 using Improbable.Schema.Bundle;
 using Improbable.Stdlib.CSharpCodeGen;
 using Improbable.WorkerSdkInterop.CSharpCodeGen;
+using McMaster.Extensions.CommandLineUtils;
 using Serilog;
 using static Improbable.CSharpCodeGen.Case;
 using Types = Improbable.CSharpCodeGen.Types;
 
 namespace CSharpCodeGenerator
 {
-    public class Options
-    {
-        [Option("input-bundle", Required = true,
-            HelpText = "The path to the JSON Bundle file output by the SpatialOS schema_compiler.")]
-        public string InputBundle { get; set; } = null!;
-
-        [Option("output-marker",
-            HelpText = "The path to a file that is written when code is successfully generated. Useful for timestamp checking in build systems.")]
-        public string OutputMarker { get; set; } = null!;
-
-        [Option("output-dir", Required = true,
-            HelpText = "The path to write the generated code to.")]
-        public string OutputDir { get; set; } = null!;
-    }
-
+    [Command]
     internal class Program
     {
+        [Option("--input-bundle", Description = "The path to the JSON Bundle file output by the SpatialOS schema_compiler.")]
+        [Required]
+        public string InputBundle { get; } = string.Empty;
+
+        [Option("--output-marker", Description = "The path to a file that is written when code is successfully generated. Useful for timestamp checking in build systems.")]
+        public string OutputMarker { get; } = string.Empty;
+
+        [Option("--output-dir", Description = "The path to write the generated code to.")]
+        [Required]
+        public string OutputDir { get; } = string.Empty;
+
+        [Option("--database-table-name", Description = "The name of the table that generated SQL will operate on.")]
+        public string DatabaseTableName { get; } = "postgres";
+
+        [Option("--database-output-dir", Description = "The path to write the generated SQL code to.")]
+        public string DatabaseOutputDir { get; } = "sql";
+
+        [Option("--project-file", Description = "The path to the spatialos.json file")]
+        public string ProjectFile { get; set; } = null!;
+
         private static void Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
                 .WriteTo.Console().
                 CreateLogger();
 
-            Parser.Default.ParseArguments<Options>(args)
-                .WithParsed(Run)
-                .WithNotParsed(errors =>
-                {
-                    foreach (var error in errors)
-                    {
-                        Log.Error(error.ToString());
-                    }
+            Log.Information("{Args}", string.Join(" ", ArgumentEscaper.EscapeAndConcatenate(args)));
 
-                    Environment.ExitCode = 1;
-                });
+            CommandLineApplication.Execute<Program>(args);
         }
 
-        private static void Run(Options options)
+        private void OnExecute(CommandLineApplication app, CancellationToken token)
         {
-
-            Log.Information(Parser.Default.FormatCommandLine(options));
 
             var timer = new Stopwatch();
             timer.Start();
@@ -65,14 +63,14 @@ namespace CSharpCodeGenerator
             {
                 try
                 {
-                    File.Delete(options.OutputMarker);
+                    File.Delete(OutputMarker);
                 }
                 catch
                 {
                     // Nothing interesting to do here.
                 }
 
-                var bundle = SchemaBundleLoader.LoadBundle(options.InputBundle);
+                var bundle = SchemaBundleLoader.LoadBundle(InputBundle);
 
                 // Sort the types by the depth of their declaration, so that nested types are generated first so they can be used by their declaring type.
                 var types = bundle.Types.Select(kv => new TypeDescription(kv.Key, bundle))
@@ -85,13 +83,15 @@ namespace CSharpCodeGenerator
                     Log.Warning(w);
                 }
 
+                var databaseGenerator = new ComponentGenerator(DatabaseTableName);
+
                 var baseGenerator = new Generator(bundle);
                 baseGenerator.FieldDecorators.Add(DatabaseSyncGenerator.JsonPropertyDecorator);
                 var generators = new List<ICodeGenerator>
                 {
                     baseGenerator,
                     new StdlibGenerator(bundle),
-                    new ComponentGenerator(),
+                    databaseGenerator,
                     new SchemaObjectGenerator(bundle),
                     new DatabaseSyncGenerator()
                 };
@@ -137,24 +137,41 @@ namespace CSharpCodeGenerator
                 {
                     var content = allContent[t.QualifiedName];
 
-                    WriteFile(options, Types.TypeToFilename(t.QualifiedName), $@"
+                    WriteFile(Types.TypeToFilename(t.QualifiedName), $@"
 namespace {t.Namespace()}
 {{
 {Indent(1, GenerateType(t, content.ToString().TrimEnd(), bundle))}
 }}");
                 }
 
+                // Extension methods.
+                foreach (var t in types.Where(type => type.ComponentId.HasValue))
+                {
+                    var content = ExtensionsGenerator.Generate(t);
+                    WriteFile(Path.ChangeExtension(Types.TypeToFilename(t.QualifiedName), ".Extension.cs"), content);
+                }
+
                 // Enums.
                 foreach (var (key, value) in bundle.Enums.Where(type => string.IsNullOrEmpty(type.Value.OuterType)))
                 {
-                    WriteFile(options, Types.TypeToFilename(key), $@"
+                    WriteFile(Types.TypeToFilename(key), $@"
 namespace {value.Namespace()}
 {{
 {Indent(1, GenerateEnum(value, bundle))}
 }}");
                 }
 
-                File.WriteAllText(options.OutputMarker, string.Empty);
+                File.WriteAllText(OutputMarker, string.Empty);
+
+                var sqlTypes = types.ToDictionary(t => t.QualifiedName, t => databaseGenerator.GenerateSql(t)).Where(kv => !string.IsNullOrEmpty(kv.Value));
+                foreach (var (type, sql) in sqlTypes)
+                {
+                    var fileName = type.Replace(".", "_").ToLowerInvariant();
+                    fileName = Path.Combine(DatabaseOutputDir, Path.ChangeExtension(fileName, ".sql"));
+                    WriteFile(fileName, sql);
+                }
+
+                WriteProjectInfo();
             }
             catch (Exception exception)
             {
@@ -166,12 +183,13 @@ namespace {value.Namespace()}
                 timer.Stop();
 
                 Log.Information($"Processed schema bundle in {timer.Elapsed}.");
+                Log.CloseAndFlush();
             }
         }
 
-        private static void WriteFile(Options options, string filename, string text)
+        private void WriteFile(string filename, string text)
         {
-            var outputPath = Path.Combine(options.OutputDir, filename);
+            var outputPath = Path.Combine(OutputDir, filename);
             var folder = Path.GetDirectoryName(outputPath);
             if (!Directory.Exists(folder))
             {
@@ -179,10 +197,10 @@ namespace {value.Namespace()}
             }
 
             // Normalize line endings so editors don't complain.
-            text = "// Generated by SpatialOS C# CodeGen.\n" + text.Trim() + "\n";
+            text = "/* Generated by SpatialOS C# CodeGen. DO NOT MODIFY! */\n" + text.Trim() + "\n";
             text = text.Replace("\r\n", "\n").Replace("\n", Environment.NewLine);
 
-            File.WriteAllText(outputPath, text, Encoding.UTF8);
+            File.WriteAllText(outputPath, text, new UTF8Encoding(false));
         }
 
         private static string GenerateEnum(EnumDefinition enumDef, Bundle bundle)
@@ -207,6 +225,17 @@ public readonly struct {type.TypeName()} : global::System.IEquatable<{type.TypeN
 {{
 {Indent(1, content)}
 }}";
+        }
+
+        private void WriteProjectInfo()
+        {
+            if (string.IsNullOrEmpty(ProjectFile) || !File.Exists(ProjectFile))
+            {
+                return;
+            }
+
+            var writer = new ProjectInfoGenerator();
+            WriteFile("ProjectInfo.cs", writer.GenerateProjectInfo(ProjectFile));
         }
     }
 }
