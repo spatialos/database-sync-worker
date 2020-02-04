@@ -53,7 +53,7 @@ steps:
   - wait
 
   - label: "upload-pipeline"
-    command: "mkdir -p nupkgs && dotnet run --project scripts/GetDependentBranchNames | buildkite-agent pipeline upload"
+    command: "mkdir -p nupkgs && dotnet run --project BootstrapEnv get-dependent-branch-names | buildkite-agent pipeline upload"
     <<: *linux
 
   - label: "annotate test results :pencil2:"

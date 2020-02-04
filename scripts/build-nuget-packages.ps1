@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 Set-Location "$PSScriptRoot/../"
 
 New-Item -ItemType Directory -Force -Path nupkgs | Out-Null
-& dotnet run --project scripts/BuildNugetPackages $args
+& dotnet run --project BootstrapEnv build-nuget-packages $args
 if (!$?) {
     exit 1
 }

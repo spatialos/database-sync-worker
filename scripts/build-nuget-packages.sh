@@ -5,4 +5,4 @@ cd "$(dirname "$0")/../"
 
 mkdir -p ./nupkgs
 
-dotnet run --project scripts/BuildNugetPackages $@
+dotnet run --project BootstrapEnv build-nuget-packages $@
