@@ -14,9 +14,14 @@ namespace BootstrapEnv
                 .MinimumLevel.Debug()
                 .CreateLogger();
 
-            CommandLineApplication.Execute<Program>(args);
-
-            Log.CloseAndFlush();
+            try
+            {
+                CommandLineApplication.Execute<Program>(args);
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
     }
 }

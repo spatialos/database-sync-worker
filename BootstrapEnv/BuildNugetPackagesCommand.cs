@@ -107,25 +107,25 @@ namespace BootstrapEnv
             return location;
         }
 
-        private static void CleanDirectory(string nugetSourceDir)
+        private static void CleanDirectory(string dir)
         {
-            Console.Out.Write($"Cleaning '{nugetSourceDir}'...");
+            Log.Information($"Cleaning '{dir}'...");
 
-            if (Directory.Exists(nugetSourceDir))
+            if (Directory.Exists(dir))
             {
                 var toUnProtect = Directory
-                    .EnumerateFileSystemEntries(nugetSourceDir, "*", SearchOption.AllDirectories).Where(IsReadOnly);
+                    .EnumerateFileSystemEntries(dir, "*", SearchOption.AllDirectories).Where(IsReadOnly);
 
                 foreach (var f in toUnProtect)
                 {
                     File.SetAttributes(f, File.GetAttributes(f) & ~FileAttributes.ReadOnly);
                 }
 
-                Console.Out.Write($" deleting...");
-                Directory.Delete(nugetSourceDir, true);
+                Log.Information(" deleting...");
+                Directory.Delete(dir, true);
             }
 
-            Directory.CreateDirectory(nugetSourceDir);
+            Directory.CreateDirectory(dir);
             Log.Information(" (done)");
         }
 

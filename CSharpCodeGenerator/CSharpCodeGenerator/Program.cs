@@ -50,9 +50,14 @@ namespace CSharpCodeGenerator
 
             Log.Information("{Args}", string.Join(" ", ArgumentEscaper.EscapeAndConcatenate(args)));
 
-            CommandLineApplication.Execute<Program>(args);
-
-            Log.CloseAndFlush();
+            try
+            {
+                CommandLineApplication.Execute<Program>(args);
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
 
         private void OnExecute(CommandLineApplication app, CancellationToken token)
