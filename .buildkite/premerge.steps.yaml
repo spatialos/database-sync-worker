@@ -48,8 +48,6 @@ steps:
   - label: "test-linux"
     id: "test-linux"
     if: build.env("ORIGINAL_BRANCH") != null
-    depends_on:
-      - step: "upload-pipeline"
     command: "ci/bk/linux.sh"
     artifact_paths:
       - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
@@ -59,8 +57,6 @@ steps:
 
   - label: "build-windows"
     if: build.env("ORIGINAL_BRANCH") != null
-    depends_on:
-      - step: "upload-pipeline"
     command: "powershell -NoProfile -NonInteractive -File ci/bk/build-win.ps1"
     artifact_paths:
       - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
@@ -88,7 +84,7 @@ steps:
     trigger: "database-sync-worker-example-premerge"
     if: build.env("ORIGINAL_BRANCH") != null
     build:
-      branch: $"{ORIGINAL_BRANCH}"
+      branch: "${ORIGINAL_BRANCH}"
       env:
         ORIGINAL_BRANCH: "{ORIGINAL_BRANCH}"
         CSHARP_BUILD_ID: "${BUILDKITE_BUILD_ID}"
