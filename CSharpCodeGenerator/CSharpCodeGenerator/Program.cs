@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using Improbable.CSharpCodeGen;
 using Improbable.DatabaseSync.CSharpCodeGen;
 using Improbable.Postgres.CSharpCodeGen;
@@ -60,7 +59,7 @@ namespace CSharpCodeGenerator
             }
         }
 
-        private void OnExecute(CommandLineApplication app, CancellationToken token)
+        private void OnExecute(CommandLineApplication app)
         {
 
             var timer = new Stopwatch();
@@ -179,11 +178,6 @@ namespace {value.Namespace()}
                 }
 
                 WriteProjectInfo();
-            }
-            catch (Exception exception)
-            {
-                Log.Error(exception, "While running");
-                Environment.ExitCode = 1;
             }
             finally
             {

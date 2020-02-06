@@ -44,7 +44,7 @@ namespace BootstrapEnv
                 .CancellationToken(token));
 
             var sdkInteropDir =
-                Path.GetFullPath(Path.Combine(nugetSourceDir, "Improbable", "WorkerSdkInterop", "Improbable.WorkerSdkInterop"));
+                Path.GetFullPath(Path.Combine(nugetSourceDir, "Improbable", "Improbable.WorkerSdkInterop.sln"));
 
             // For simplicity, some packages depend on Improbable.WorkerSdkInterop as a NuGet package rather than as a project reference.
             // Make sure that's packaged first in the source directory.
@@ -56,7 +56,7 @@ namespace BootstrapEnv
                 .Task.ConfigureAwait(false);
 
             // Now build everything into the worker's directory.
-            await shell.Run("dotnet", "pack", Path.Combine(nugetSourceDir, "Improbable"), "--verbosity:quiet",
+            await shell.Run("dotnet", "pack", Path.Combine(nugetSourceDir, "Improbable", "Improbable.sln"), "--verbosity:quiet",
                 "-p:Platform=x64", "--output", targetPath)
                 .RedirectTo(Console.Out)
                 .RedirectStandardErrorTo(Console.Error)
