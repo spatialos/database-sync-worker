@@ -4,7 +4,7 @@ using Serilog;
 namespace BootstrapEnv
 {
     [Command]
-    [Subcommand(typeof(BuildNugetPackagesCommand), typeof(GetDependentBranchNamesCommand))]
+    [Subcommand(typeof(GetArtifactsCommand), typeof(GetDependentBranchNamesCommand))]
     internal class Program
     {
         private static void Main(string[] args)

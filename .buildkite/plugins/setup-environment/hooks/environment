@@ -13,12 +13,14 @@ TIMESTAMP=$(date +"%y%m%d%H%M%S%N")
 export DOCKER_COMPOSE_NAME="compose_${GIT_HASH}_${TIMESTAMP}"
 
 # Create volume mount points for build artifacts. These are consumed in the docker compose files.
-export UNIQUE_BUILD_PATH="${BUILDKITE_BUILD_ID}/${BUILDKITE_JOB_ID}"
+export UNIQUE_BUILD_PATH="${BUILDKITE_BUILD_ID}"
 export LOGS_DIR="/tmp/${UNIQUE_BUILD_PATH}-logs"
 export TEST_RESULTS_DIR="/tmp/${UNIQUE_BUILD_PATH}-tests"
+export WORKER_DIR="/tmp/${UNIQUE_BUILD_PATH}-worker"
 
 mkdir -p "${LOGS_DIR}"
 mkdir -p "${TEST_RESULTS_DIR}"
+mkdir -p "${WORKER_DIR}"
 
 # Create volume mount point for the build secret, and put it into the default location.
 # This is mounted as a volume in the docker compose files.

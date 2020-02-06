@@ -34,8 +34,23 @@ windows: &windows
 dag: true
 
 steps:
+  # If run by CI directly, start a csharp-worker-template build.
+  - label: "build-csharp-worker-template"
+    trigger: "csharp-worker-template-premerge"
+    if: build.env("ORIGINAL_BRANCH") == null
+    build:
+      branch: $"{ORIGINAL_BRANCH:-master}"
+      env:
+        ORIGINAL_BRANCH: "{ORIGINAL_BRANCH:-master}"
+        CSHARP_BUILD_ID: "${BUILDKITE_BUILD_ID}"
+        CSHARP_JOB_ID: "${BUILDKITE_JOB_ID}"
+    <<: *linux
+
   - label: "test-linux"
     id: "test-linux"
+    if: build.env("ORIGINAL_BRANCH") != null
+    depends_on:
+      - step: "upload-pipeline"
     command: "ci/bk/linux.sh"
     artifact_paths:
       - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
@@ -44,6 +59,9 @@ steps:
     <<: *linux
 
   - label: "build-windows"
+    if: build.env("ORIGINAL_BRANCH") != null
+    depends_on:
+      - step: "upload-pipeline"
     command: "powershell -NoProfile -NonInteractive -File ci/bk/build-win.ps1"
     artifact_paths:
       - "/tmp/${BUILDKITE_BUILD_ID}/**/*"
@@ -51,10 +69,6 @@ steps:
 
     # Wait for successful build on this pipeline before kicking off dependent pipelines.
   - wait
-
-  - label: "upload-pipeline"
-    command: "mkdir -p nupkgs && dotnet run --project BootstrapEnv get-dependent-branch-names | buildkite-agent pipeline upload"
-    <<: *linux
 
   - label: "annotate test results :pencil2:"
     depends_on:
@@ -69,3 +83,16 @@ steps:
           formatter:
             type: details
     <<: *linux
+
+    # Start the downstream build.
+  - label: "build-database-sync-worker-example"
+    trigger: "database-sync-worker-example-premerge"
+    if: build.env("ORIGINAL_BRANCH") != null
+    build:
+      branch: $"{ORIGINAL_BRANCH}"
+      env:
+        ORIGINAL_BRANCH: "{ORIGINAL_BRANCH}"
+        CSHARP_BUILD_ID: "${BUILDKITE_BUILD_ID}"
+        CSHARP_JOB_ID: "${BUILDKITE_JOB_ID}"
+    <<: *linux
+

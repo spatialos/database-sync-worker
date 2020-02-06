@@ -8,8 +8,11 @@ services:
     volumes:
         - ${IMPROBABLE_CONFIG_DIR}:/home/user/.improbable
         - ${TEST_RESULTS_DIR}:/build/worker/test-results
+        - ${WORKER_DIR}:/build/worker/bin
     environment:
         - TEST_RESULTS_DIR=/build/worker/test-results
-        - CSHARP_TEMPLATE_BRANCH=${CSHARP_TEMPLATE_BRANCH}
+        - CSHARP_BUILD_NUMBER=${CSHARP_BUILD_NUMBER}
+        - CSHARP_JOB_ID=${CSHARP_JOB_ID}
         - BUILDKITE_BRANCH=${BUILDKITE_BRANCH}
+        - ORIGINAL_BRANCH=${ORIGINAL_BRANCH}
 

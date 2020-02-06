@@ -3,6 +3,4 @@ set -e -u -x -o pipefail
 
 cd "$(dirname "$0")/../"
 
-mkdir -p ./nupkgs
-
-dotnet run --project BootstrapEnv build-nuget-packages $@
+dotnet run --project BootstrapEnv get-nuget-packages $@ --prefix CSHARP
