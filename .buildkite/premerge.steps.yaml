@@ -39,9 +39,9 @@ steps:
     trigger: "csharp-worker-template-premerge"
     if: build.env("ORIGINAL_BRANCH") == null
     build:
-      branch: "${ORIGINAL_BRANCH:-master}"
+      branch: "${BUILDKITE_BRANCH}"
       env:
-        ORIGINAL_BRANCH: "${ORIGINAL_BRANCH:-master}"
+        ORIGINAL_BRANCH: "${BUILDKITE_BRANCH}"
         CSHARP_BUILD_ID: "${BUILDKITE_BUILD_ID}"
         CSHARP_JOB_ID: "${BUILDKITE_JOB_ID}"
 
