@@ -4,7 +4,7 @@ linux: &linux
     - "environment=production"
     - "permission_set=builder"
     - "platform=linux"  # if you need a different platform, configure this: macos|linux|windows.
-    - "queue=${CI_LINUX_BUILDER_QUEUE:-v4-2020-01-02-bk5664-bc172f895ccea5a9}"
+    - "queue=${CI_LINUX_BUILDER_QUEUE:-v4-20-03-25-165423-bk9911-8e8cbe29}"
     - "scaler_version=2"
   timeout_in_minutes: 10
   retry:
@@ -19,7 +19,7 @@ windows: &windows
     - "environment=production"
     - "permission_set=builder"
     - "platform=windows"  # if you need a different platform, configure this: macos|linux|windows.
-    - "queue=${CI_WINDOWS_BUILDER_QUEUE:-v4-2020-01-02-bk5660-1fa9f56aa49f323c}"
+    - "queue=${CI_WINDOWS_BUILDER_QUEUE:-v4-20-03-25-165423-bk9910-8e8cbe29}"
     - "scaler_version=2"
   timeout_in_minutes: 10
   retry:
